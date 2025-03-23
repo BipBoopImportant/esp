@@ -40,6 +40,11 @@ void WebInterface::setupRoutes() {
 }
 
 void WebInterface::handleRoot() {
+  String html = F("<!DOCTYPE html>"revent caching
+"<html lang=\"en\">"r("Cache-Control", "no-cache, no-store, must-revalidate");
+"<head>"r->sendHeader("Pragma", "no-cache");
+"  <meta charset=\"UTF-8\">"es", "0");
+"  <title>ESL Blaster</title>"
   String html = F("<!DOCTYPE html>"
 "<html lang=\"en\">"
 "<head>"
@@ -168,9 +173,9 @@ void WebInterface::handleRoot() {
 "  <h1>ESL Blaster Control Panel</h1>"
 "  "
 "  <div class=\"quick-actions\">"
-"    <button id=\"statusBtn\">Device Status</button>"
-"    <button id=\"restartBtn\">Restart Device</button>"
-"    <button id=\"testFreqBtn\">Test 1.25MHz</button>"
+"    <button id=\"statusBtn\" type=\"button\">Device Status</button>"
+"    <button id=\"restartBtn\" type=\"button\">Restart Device</button>"
+"    <button id=\"testFreqBtn\" type=\"button\">Test 1.25MHz</button>"
 "  </div>"
 "  "
 "  <div class=\"tab-container\">"
@@ -363,177 +368,244 @@ void WebInterface::handleRoot() {
 "  <div id=\"status-message\"></div>"
 "  "
 "  <script>"
-"    // Wait for the DOM to be fully loaded"
-"    document.addEventListener('DOMContentLoaded', function() {"
-"      console.log('DOM fully loaded');"
+"    // Immediately invoked function to ensure proper scope"
+"    (function() {"
+"      console.log('Script loaded');"
 "      "
-"      // Tab functionality"
-"      const tabButtons = document.querySelectorAll('.tab-button');"
-"      const tabContents = document.querySelectorAll('.tab-content');"
-"      "
-"      tabButtons.forEach(button => {"
-"        button.addEventListener('click', function() {"
-"          console.log('Tab clicked:', this.dataset.target);"
-"          "
-"          // Remove active class from all tabs"
-"          tabButtons.forEach(btn => btn.classList.remove('active'));"
-"          tabContents.forEach(content => content.classList.remove('active'));"
-"          "
-"          // Add active class to current tab"
-"          this.classList.add('active');"
-"          document.getElementById(this.dataset.target).classList.add('active');"
-"          "
-"          // If About tab is selected, update the information"
-"          if (this.dataset.target === 'AboutTab') {"
-"            updateAboutInfo();"
-"          }"
-"        });"
+"      // Wait for the DOM to be fully loaded"
+"      document.addEventListener('DOMContentLoaded', function() {"
+"        console.log('DOM fully loaded');"
+"        initializeApp();"
 "      });"
 "      "
-"      // Status message display"
-"      function showStatus(message, isError) {"
-"        console.log('Status:', message, 'Error:', isError);"
-"        const statusDiv = document.getElementById('status-message');"
-"        statusDiv.textContent = message;"
-"        statusDiv.className = isError ? 'error' : 'success';"
-"        statusDiv.style.display = 'block';"
-"        "
-"        // Hide after 5 seconds"
-"        setTimeout(() => {"
-"          statusDiv.style.display = 'none';"
-"        }, 5000);"
+"      // If DOM is already loaded, initialize immediately"
+"      if (document.readyState === 'complete' || document.readyState === 'interactive') {"
+"        console.log('DOM already loaded, initializing immediately');"
+"        setTimeout(initializeApp, 1);"
 "      }"
 "      "
-"      // Form submissions"
-"      const forms = {"
-"        'imageForm': '/transmit-image',"
-"        'rawForm': '/raw-command',"
-"        'segmentForm': '/set-segments',"
-"        'pingForm': '/ping',"
-"        'refreshForm': '/refresh',"
-"        'wifiForm': '/wifi-config'"
-"      };"
-"      "
-"      // Process all forms"
-"      Object.keys(forms).forEach(formId => {"
-"        const form = document.getElementById(formId);"
-"        if (form) {"
-"          form.addEventListener('submit', async function(e) {"
-"            e.preventDefault();"
-"            console.log('Form submitted:', formId);"
-"            "
-"            // Special handling for image upload"
-"            if (formId === 'imageForm') {"
-"              showStatus('Uploading and processing image...', false);"
-"            }"
-"            "
-"            // Create FormData object"
-"            const formData = new FormData(this);"
-"            "
-"            try {"
-"              // Send the form data to the server"
-"              const response = await fetch(forms[formId], {"
-"                method: 'POST',"
-"                body: formData"
+"      function initializeApp() {"
+"        try {"
+"          // Tab functionality"
+"          const tabButtons = document.querySelectorAll('.tab-button');"
+"          const tabContents = document.querySelectorAll('.tab-content');"
+"          "
+"          console.log('Found tab buttons:', tabButtons.length);"
+"          console.log('Found tab contents:', tabContents.length);"
+"          "
+"          tabButtons.forEach(function(button) {"
+"            button.addEventListener('click', function() {"
+"              const target = this.getAttribute('data-target');"
+"              console.log('Tab clicked:', target);"
+"              "
+"              // Remove active class from all tabs"
+"              tabButtons.forEach(function(btn) {"
+"                btn.classList.remove('active');"
+"              });"
+"              tabContents.forEach(function(content) {"
+"                content.classList.remove('active');"
 "              });"
 "              "
-"              // Parse the JSON response"
-"              const data = await response.json();"
-"              "
-"              // Show success or error message"
-"              if (response.ok) {"
-"                showStatus(data.message, false);"
-"                "
-"                // Special handling for WiFi settings"
-"                if (formId === 'wifiForm' && data.success) {"
-"                  showStatus(data.message + ' Device will restart...', false);"
-"                  setTimeout(() => {"
-"                    window.location.reload();"
-"                  }, 5000);"
-"                }"
+"              // Add active class to current tab"
+"              this.classList.add('active');"
+"              const targetContent = document.getElementById(target);"
+"              if (targetContent) {"
+"                targetContent.classList.add('active');"
 "              } else {"
-"                showStatus(data.error, true);"
+"                console.error('Target content not found:', target);"
 "              }"
-"            } catch (error) {"
-"              console.error('Error:', error);"
-"              showStatus('Network error: ' + error.message, true);"
-"            }"
+"              "
+"              // If About tab is selected, update the information"
+"              if (target === 'AboutTab') {"
+"                updateAboutInfo();"
+"              }"
+"            });"
 "          });"
-"        } else {"
-"          console.error('Form not found:', formId);"
-"        }"
-"      });"
-"      "
-"      // Quick action buttons"
-"      document.getElementById('statusBtn').addEventListener('click', async function() {"
-"        console.log('Status button clicked');"
-"        try {"
-"          const response = await fetch('/status');"
-"          const data = await response.json();"
 "          "
-"          let statusMessage = 'Status:\\n';"
-"          statusMessage += `WiFi: ${data.wifi_mode}\\n`;"
-"          statusMessage += `Connected: ${data.connected}\\n`;"
-"          statusMessage += `IP: ${data.ip}\\n`;"
-"          statusMessage += `Uptime: ${formatUptime(data.uptime)}\\n`;"
-"          statusMessage += `Free Heap: ${formatBytes(data.free_heap)}\\n`;"
-"          statusMessage += `Frames Sent: ${data.frames_sent}\\n`;"
-"          "
-"          showStatus(statusMessage, false);"
-"        } catch (error) {"
-"          console.error('Error:', error);"
-"          showStatus('Network error: ' + error.message, true);"
-"        }"
-"      });"
-"      "
-"      document.getElementById('testFreqBtn').addEventListener('click', async function() {"
-"        console.log('Test frequency button clicked');"
-"        try {"
-"          showStatus('Testing 1.25MHz signal for 5 seconds...', false);"
-"          const response = await fetch('/test-frequency');"
-"          const data = await response.json();"
-"          showStatus(data.message, !data.success);"
-"        } catch (error) {"
-"          console.error('Error:', error);"
-"          showStatus('Network error: ' + error.message, true);"
-"        }"
-"      });"
-"      "
-"      document.getElementById('restartBtn').addEventListener('click', async function() {"
-"        console.log('Restart button clicked');"
-"        if (confirm('Are you sure you want to restart the device?')) {"
-"          try {"
-"            const response = await fetch('/restart', { method: 'POST' });"
-"            const data = await response.json();"
-"            showStatus(data.message, !data.success);"
+"          // Status message display"
+"          function showStatus(message, isError) {"
+"            console.log('Status:', message, 'Error:', isError);"
+"            const statusDiv = document.getElementById('status-message');"
+"            if (!statusDiv) {"
+"              console.error('Status message div not found');"
+"              return;"
+"            }"
+"            statusDiv.textContent = message;"
+"            statusDiv.className = isError ? 'error' : 'success';"
+"            statusDiv.style.display = 'block';"
 "            "
-"            if (data.success) {"
-"              setTimeout(() => {"
-"                window.location.reload();"
-"              }, 5000);"
-"            }"
-"          } catch (error) {"
-"            console.error('Error:', error);"
-"            showStatus('Network error: ' + error.message, true);"
+"            // Hide after 5 seconds"
+"            setTimeout(function() {"
+"              statusDiv.style.display = 'none';"
+"            }, 5000);"
 "          }"
-"        }"
-"      });"
-"      "
-"      // About tab information"
-"      function updateAboutInfo() {"
-"        console.log('Updating About tab info');"
-"        fetch('/status')"
-"          .then(response => response.json())"
-"          .then(data => {"
-"            document.getElementById('hwVersion').textContent = data.hw_version || 'A';"
-"            document.getElementById('fwVersion').textContent = data.fw_version || '1.0.0';"
-"            document.getElementById('uptime').textContent = formatUptime(data.uptime);"
-"            document.getElementById('freeHeap').textContent = formatBytes(data.free_heap);"
-"          })"
-"          .catch(error => {"
-"            console.error('Error updating about info:', error);"
-"            showStatus('Failed to update About info', true);"
+"          "
+"          // Form submissions"
+"          const forms = {"
+"            'imageForm': '/transmit-image',"
+"            'rawForm': '/raw-command',"
+"            'segmentForm': '/set-segments',"
+"            'pingForm': '/ping',"
+"            'refreshForm': '/refresh',"
+"            'wifiForm': '/wifi-config'"
+"          };"
+"          "
+"          // Process all forms"
+"          Object.keys(forms).forEach(function(formId) {"
+"            const form = document.getElementById(formId);"
+"            if (form) {"
+"              console.log('Found form:', formId);"
+"              form.addEventListener('submit', function(e) {"
+"                e.preventDefault();"
+"                console.log('Form submitted:', formId);"
+"                "
+"                // Special handling for image upload"
+"                if (formId === 'imageForm') {"
+"                  showStatus('Uploading and processing image...', false);"
+"                }"
+"                "
+"                // Create FormData object"
+"                const formData = new FormData(this);"
+"                "
+"                // Send the form data to the server"
+"                fetch(forms[formId], {"
+"                  method: 'POST',"
+"                  body: formData"
+"                })"
+"                .then(function(response) {"
+"                  return response.json();"
+"                })"
+"                .then(function(data) {"
+"                  if (data.success) {"
+"                    showStatus(data.message, false);"
+"                    "
+"                    // Special handling for WiFi settings"
+"                    if (formId === 'wifiForm' && data.success) {"
+"                      showStatus(data.message + ' Device will restart...', false);"
+"                      setTimeout(function() {"
+"                        window.location.reload();"
+"                      }, 5000);"
+"                    }"
+"                  } else {"
+"                    showStatus(data.error || 'An error occurred', true);"
+"                  }"
+"                })"
+"                .catch(function(error) {"
+"                  console.error('Error:', error);"
+"                  showStatus('Network error: ' + error.message, true);"
+"                });"
+"              });"
+"            } else {"
+"              console.error('Form not found:', formId);"
+"            }"
 "          });"
+"          "
+"          // Quick action buttons"
+"          const statusBtn = document.getElementById('statusBtn');"
+"          if (statusBtn) {"
+"            statusBtn.addEventListener('click', function() {"
+"              console.log('Status button clicked');"
+"              fetch('/status')"
+"                .then(function(response) {"
+"                  return response.json();"
+"                })"
+"                .then(function(data) {"
+"                  let statusMessage = 'Status:\\n';"
+"                  statusMessage += `WiFi: ${data.wifi_mode}\\n`;"
+"                  statusMessage += `Connected: ${data.connected}\\n`;"
+"                  statusMessage += `IP: ${data.ip}\\n`;"
+"                  statusMessage += `Uptime: ${formatUptime(data.uptime)}\\n`;"
+"                  statusMessage += `Free Heap: ${formatBytes(data.free_heap)}\\n`;"
+"                  statusMessage += `Frames Sent: ${data.frames_sent}\\n`;"
+"                  "
+"                  showStatus(statusMessage, false);"
+"                })"
+"                .catch(function(error) {"
+"                  console.error('Error:', error);"
+"                  showStatus('Network error: ' + error.message, true);"
+"                });"
+"            });"
+"          } else {"
+"            console.error('Status button not found');"
+"          }"
+"          "
+"          const testFreqBtn = document.getElementById('testFreqBtn');"
+"          if (testFreqBtn) {"
+"            testFreqBtn.addEventListener('click', function() {"
+"              console.log('Test frequency button clicked');"
+"              showStatus('Testing 1.25MHz signal for 5 seconds...', false);"
+"              fetch('/test-frequency')"
+"                .then(function(response) {"
+"                  return response.json();"
+"                })"
+"                .then(function(data) {"
+"                  showStatus(data.message, !data.success);"
+"                })"
+"                .catch(function(error) {"
+"                  console.error('Error:', error);"
+"                  showStatus('Network error: ' + error.message, true);"
+"                });"
+"            });"
+"          } else {"
+"            console.error('Test frequency button not found');"
+"          }"
+"          "
+"          const restartBtn = document.getElementById('restartBtn');"
+"          if (restartBtn) {"
+"            restartBtn.addEventListener('click', function() {"
+"              console.log('Restart button clicked');"
+"              if (confirm('Are you sure you want to restart the device?')) {"
+"                fetch('/restart', { method: 'POST' })"
+"                  .then(function(response) {"
+"                    return response.json();"
+"                  })"
+"                  .then(function(data) {"
+"                    showStatus(data.message, !data.success);"
+"                    "
+"                    if (data.success) {"
+"                      setTimeout(function() {"
+"                        window.location.reload();"
+"                      }, 5000);"
+"                    }"
+"                  })"
+"                  .catch(function(error) {"
+"                    console.error('Error:', error);"
+"                    showStatus('Network error: ' + error.message, true);"
+"                  });"
+"              }"
+"            });"
+"          } else {"
+"            console.error('Restart button not found');"
+"          }"
+"          "
+"          // About tab information"
+"          function updateAboutInfo() {"
+"            console.log('Updating About tab info');"
+"            fetch('/status')"
+"              .then(function(response) {"
+"                return response.json();"
+"              })"
+"              .then(function(data) {"
+"                document.getElementById('hwVersion').textContent = data.hw_version || 'A';"
+"                document.getElementById('fwVersion').textContent = data.fw_version || '1.0.0';"
+"                document.getElementById('uptime').textContent = formatUptime(data.uptime);"
+"                document.getElementById('freeHeap').textContent = formatBytes(data.free_heap);"
+"              })"
+"              .catch(function(error) {"
+"                console.error('Error updating about info:', error);"
+"                showStatus('Failed to update About info', true);"
+"              });"
+"          }"
+"          "
+"          // Initial update of About tab if it's active"
+"          if (document.querySelector('#AboutTab.active')) {"
+"            updateAboutInfo();"
+"          }"
+"          "
+"          console.log('App initialized successfully');"
+"        } catch (e) {"
+"          console.error('Error initializing app:', e);"
+"        }"
 "      }"
 "      "
 "      // Helper functions"
@@ -557,7 +629,7 @@ void WebInterface::handleRoot() {
 "        else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';"
 "        else return (bytes / 1048576).toFixed(2) + ' MB';"
 "      }"
-"    });"
+"    })();"
 "  </script>"
 "</body>"
 "</html>");
@@ -1082,83 +1154,87 @@ void WebInterface::handleRestart() {
   ESP.restart();
 }
 
-void WebInterface::handleStatus() {
-  // Create a JSON response with the current status
-  DynamicJsonDocument doc(512);
+void WebInterface::handleStatus() {ng
+  // Create a JSON response with the current status _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  DynamicJsonDocument doc(512);  _server->sendHeader("Pragma", "no-cache");
   
   doc["wifi_mode"] = WiFi.getMode() == WIFI_STA ? "Station" : "Access Point";
   doc["connected"] = WiFi.status() == WL_CONNECTED ? "Yes" : "No";
   doc["ip"] = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-  doc["uptime"] = (millis() - uptimeStart) / 1000;
-  doc["free_heap"] = ESP.getFreeHeap();
-  doc["frames_sent"] = totalFramesSent;
-  doc["cpu_freq"] = ESP.getCpuFreqMHz();
-  doc["busy"] = _irTransmitter->isBusy();
-  doc["hw_version"] = HW_VERSION;
-  doc["fw_version"] = FW_VERSION;
-  doc["build_date"] = "2025-03-23";
-  doc["last_update"] = "2025-03-23 05:47:25";
-  doc["system_user"] = "BipBoopImportant";
-  
-  String response;
-  serializeJson(doc, response);
-  
-  _server->send(200, "application/json", response);
-}
+  doc["uptime"] = (millis() - uptimeStart) / 1000;oid WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {
 
-void WebInterface::handleTestFrequency() {
-  _oledInterface->showStatus("Testing", "1.25MHz signal");
-  
-  // Run the test
-  _irTransmitter->testFrequency();
-  
-  // Update display
-  String ipString = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-  _oledInterface->showMainScreen("Ready", ipString);
-  
-  // Send response
-  DynamicJsonDocument doc(256);
-  doc["success"] = true;
-  doc["message"] = "1.25MHz test completed successfully";
-  
-  String response;
-  serializeJson(doc, response);
-  
-  _server->send(200, "application/json", response);
-}
 
-void WebInterface::handleNotFound() {
-  _server->send(404, "text/plain", "Not Found");
-}
 
-void WebInterface::sendSuccessResponse(String message) {
-  DynamicJsonDocument doc(256);
-  doc["success"] = true;
-  doc["message"] = message;
-  
-  String response;
-  serializeJson(doc, response);
-  
-  _server->send(200, "application/json", response);
-}
 
-void WebInterface::sendErrorResponse(String error) {
-  DynamicJsonDocument doc(256);
-  doc["success"] = false;
-  doc["error"] = error;
-  
-  String response;
-  serializeJson(doc, response);
-  
-  _server->send(400, "application/json", response);
-}
 
-void WebInterface::sendHtmlResponse(String html, int statusCode) {
-  _server->send(statusCode, "text/html", html);
-}
 
-void WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {
-  _server->on(uri, HTTP_GET, [this, contentType, content]() {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}  });    _server->send(200, contentType, content);  _server->on(uri, HTTP_GET, [this, contentType, content]() {void WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {}  _server->send(statusCode, "text/html", html);void WebInterface::sendHtmlResponse(String html, int statusCode) {}  _server->send(400, "application/json", response);    serializeJson(doc, response);  String response;    doc["error"] = error;  doc["success"] = false;  DynamicJsonDocument doc(256);void WebInterface::sendErrorResponse(String error) {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["message"] = message;  doc["success"] = true;  DynamicJsonDocument doc(256);void WebInterface::sendSuccessResponse(String message) {}  _server->send(404, "text/plain", "Not Found");void WebInterface::handleNotFound() {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["message"] = "1.25MHz test completed successfully";  doc["success"] = true;  DynamicJsonDocument doc(256);  // Send response    _oledInterface->showMainScreen("Ready", ipString);  String ipString = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();  // Update display    _irTransmitter->testFrequency();  // Run the test    _oledInterface->showStatus("Testing", "1.25MHz signal");void WebInterface::handleTestFrequency() {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["system_user"] = "BipBoopImportant";  doc["last_update"] = "2025-03-23 05:47:25";  doc["build_date"] = "2025-03-23";  doc["fw_version"] = FW_VERSION;  doc["hw_version"] = HW_VERSION;  doc["busy"] = _irTransmitter->isBusy();  doc["cpu_freq"] = ESP.getCpuFreqMHz();  doc["frames_sent"] = totalFramesSent;  doc["free_heap"] = ESP.getFreeHeap();  _server->on(uri, HTTP_GET, [this, contentType, content]() {
     _server->send(200, contentType, content);
   });
 }
