@@ -45,596 +45,327 @@ void WebInterface::handleRoot() {
   _server->sendHeader("Pragma", "no-cache");
   _server->sendHeader("Expires", "0");
   
-  String html = F("<!DOCTYPE html>"
-"<html lang=\"en\">"
-"<head>"
-"  <meta charset=\"UTF-8\">"
-"  <title>ESL Blaster</title>"
-"  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-"  <meta http-equiv=\"Cache-Control\" content=\"no-cache, no-store, must-revalidate\" />"
-"  <meta http-equiv=\"Pragma\" content=\"no-cache\" />"
-"  <meta http-equiv=\"Expires\" content=\"0\" />"
-"  <style>"
-"    * { box-sizing: border-box; }"
-"    body {"
-"      font-family: Arial, sans-serif;"
-"      max-width: 800px;"
-"      margin: 0 auto;"
-"      padding: 20px;"
-"      color: #333;"
-"      line-height: 1.6;"
-"    }"
-"    h1, h2 {"
-"      color: #2c3e50;"
-"      margin-top: 0;"
-"    }"
-"    h1 {"
-"      text-align: center;"
-"      margin-bottom: 20px;"
-"    }"
-"    .tab-container {"
-"      margin-bottom: 20px;"
-"    }"
-"    .tabs {"
-"      display: flex;"
-"      flex-wrap: wrap;"
-"      border-bottom: 1px solid #ccc;"
-"      margin-bottom: 0;"
-"    }"
-"    .tab-button {"
-"      background-color: #f1f1f1;"
-"      border: 1px solid #ccc;"
-"      border-bottom: none;"
-"      border-radius: 4px 4px 0 0;"
-"      padding: 10px 15px;"
-"      margin-right: 5px;"
-"      margin-bottom: -1px;"
-"      cursor: pointer;"
-"      transition: 0.3s;"
-"      position: relative;"
-"      top: 1px;"
-"    }"
-"    .tab-button:hover {"
-"      background-color: #ddd;"
-"    }"
-"    .tab-button.active {"
-"      background-color: #3498db;"
-"      color: white;"
-"      border-bottom: 1px solid #3498db;"
-"    }"
-"    .tab-content {"
-"      display: none;"
-"      padding: 20px;"
-"      border: 1px solid #ccc;"
-"      border-top: none;"
-"      border-radius: 0 0 4px 4px;"
-"      background-color: #fff;"
-"    }"
-"    .tab-content.active {"
-"      display: block;"
-"    }"
-"    .form-group {"
-"      margin-bottom: 15px;"
-"    }"
-"    label {"
-"      display: block;"
-"      margin-bottom: 5px;"
-"      font-weight: bold;"
-"    }"
-"    input[type=text], input[type=number], input[type=password], select, textarea {"
-"      width: 100%;"
-"      padding: 10px;"
-"      border: 1px solid #ddd;"
-"      border-radius: 4px;"
-"      font-size: 16px;"
-"    }"
-"    button[type=submit], button[type=button] {"
-"      background-color: #3498db;"
-"      color: white;"
-"      padding: 10px 15px;"
-"      border: none;"
-"      border-radius: 4px;"
-"      cursor: pointer;"
-"      font-size: 16px;"
-"      margin-top: 10px;"
-"    }"
-"    button[type=submit]:hover, button[type=button]:hover {"
-"      background-color: #2980b9;"
-"    }"
-"    #status-message {"
-"      margin-top: 20px;"
-"      padding: 15px;"
-"      border-radius: 4px;"
-"      display: none;"
-"    }"
-"    .success {"
-"      background-color: #d4edda;"
-"      color: #155724;"
-"      border: 1px solid #c3e6cb;"
-"    }"
-"    .error {"
-"      background-color: #f8d7da;"
-"      color: #721c24;"
-"      border: 1px solid #f5c6cb;"
-"    }"
-"    .quick-actions {"
-"      display: flex;"
-"      flex-wrap: wrap;"
-"      gap: 10px;"
-"      margin-bottom: 20px;"
-"    }"
-"    .quick-actions button {"
-"      flex: 1;"
-"      min-width: 150px;"
-"    }"
-"  </style>"
-"</head>"
-"<body>"
-"  <h1>ESL Blaster Control Panel</h1>"
-"  "
-"  <div class=\"quick-actions\">"
-"    <button id=\"statusBtn\" type=\"button\">Device Status</button>"
-"    <button id=\"restartBtn\" type=\"button\">Restart Device</button>"
-"    <button id=\"testFreqBtn\" type=\"button\">Test 1.25MHz</button>"
-"  </div>"
-"  "
-"  <div class=\"tab-container\">"
-"    <div class=\"tabs\">"
-"      <button class=\"tab-button active\" data-target=\"ImageTab\">Image</button>"
-"      <button class=\"tab-button\" data-target=\"RawTab\">Raw Command</button>"
-"      <button class=\"tab-button\" data-target=\"SegmentTab\">Segments</button>"
-"      <button class=\"tab-button\" data-target=\"PingTab\">Ping/Refresh</button>"
-"      <button class=\"tab-button\" data-target=\"SettingsTab\">WiFi Settings</button>"
-"      <button class=\"tab-button\" data-target=\"AboutTab\">About</button>"
-"    </div>"
-"  "
-"    <div id=\"ImageTab\" class=\"tab-content active\">"
-"      <h2>Transmit Image to ESL</h2>"
-"      <form id=\"imageForm\" enctype=\"multipart/form-data\">"
-"        <div class=\"form-group\">"
-"          <label for=\"barcode\">ESL Barcode (17 digits):</label>"
-"          <input type=\"text\" id=\"barcode\" name=\"barcode\" required pattern=\".{17,17}\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"imageFile\">Image File:</label>"
-"          <input type=\"file\" id=\"imageFile\" name=\"imageFile\" accept=\"image/*\" required>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"page\">Page (0-15):</label>"
-"          <input type=\"number\" id=\"page\" name=\"page\" min=\"0\" max=\"15\" value=\"0\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"colorMode\">Color Mode:</label>"
-"          <select id=\"colorMode\" name=\"colorMode\">"
-"            <option value=\"0\">Black & White</option>"
-"            <option value=\"1\">Color</option>"
-"          </select>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"posX\">X Position:</label>"
-"          <input type=\"number\" id=\"posX\" name=\"posX\" min=\"0\" value=\"0\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"posY\">Y Position:</label>"
-"          <input type=\"number\" id=\"posY\" name=\"posY\" min=\"0\" value=\"0\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"forcePP4\">"
-"            <input type=\"checkbox\" id=\"forcePP4\" name=\"forcePP4\">"
-"            Force PP4 Protocol"
-"          </label>"
-"        </div>"
-"        "
-"        <button type=\"submit\">Transmit Image</button>"
-"      </form>"
-"    </div>"
-"  "
-"    <div id=\"RawTab\" class=\"tab-content\">"
-"      <h2>Send Raw Command</h2>"
-"      <form id=\"rawForm\">"
-"        <div class=\"form-group\">"
-"          <label for=\"rawBarcode\">ESL Barcode (17 digits):</label>"
-"          <input type=\"text\" id=\"rawBarcode\" name=\"barcode\" required pattern=\".{17,17}\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"eslType\">ESL Type:</label>"
-"          <select id=\"eslType\" name=\"type\">"
-"            <option value=\"DM\">Dot Matrix (DM)</option>"
-"            <option value=\"SEG\">Segment (SEG)</option>"
-"          </select>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"hexData\">Hex Data (without first byte and CRC):</label>"
-"          <textarea id=\"hexData\" name=\"hexData\" rows=\"4\" required></textarea>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"repeatCount\">Repeat Count:</label>"
-"          <input type=\"number\" id=\"repeatCount\" name=\"repeatCount\" min=\"1\" value=\"1\">"
-"        </div>"
-"        "
-"        <button type=\"submit\">Send Command</button>"
-"      </form>"
-"    </div>"
-"  "
-"    <div id=\"SegmentTab\" class=\"tab-content\">"
-"      <h2>Set Segments</h2>"
-"      <form id=\"segmentForm\">"
-"        <div class=\"form-group\">"
-"          <label for=\"segBarcode\">ESL Barcode (17 digits):</label>"
-"          <input type=\"text\" id=\"segBarcode\" name=\"barcode\" required pattern=\".{17,17}\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"bitmap\">Segment Bitmap (46 hex digits):</label>"
-"          <textarea id=\"bitmap\" name=\"bitmap\" rows=\"4\" required pattern=\"[0-9A-Fa-f]{46}\"></textarea>"
-"        </div>"
-"        "
-"        <button type=\"submit\">Set Segments</button>"
-"      </form>"
-"    </div>"
-"  "
-"    <div id=\"PingTab\" class=\"tab-content\">"
-"      <h2>Ping & Refresh ESLs</h2>"
-"      <form id=\"pingForm\">"
-"        <div class=\"form-group\">"
-"          <label for=\"pingBarcode\">ESL Barcode (17 digits):</label>"
-"          <input type=\"text\" id=\"pingBarcode\" name=\"barcode\" required pattern=\".{17,17}\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"forcePP4Ping\">"
-"            <input type=\"checkbox\" id=\"forcePP4Ping\" name=\"forcePP4\">"
-"            Force PP4 Protocol"
-"          </label>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"repeatCountPing\">Repeat Count:</label>"
-"          <input type=\"number\" id=\"repeatCountPing\" name=\"repeatCount\" min=\"1\" value=\"400\">"
-"        </div>"
-"        "
-"        <button type=\"submit\">Send Ping</button>"
-"      </form>"
-"      "
-"      <h2>Refresh Display</h2>"
-"      <form id=\"refreshForm\">"
-"        <div class=\"form-group\">"
-"          <label for=\"refreshBarcode\">ESL Barcode (17 digits):</label>"
-"          <input type=\"text\" id=\"refreshBarcode\" name=\"barcode\" required pattern=\".{17,17}\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"forcePP4Refresh\">"
-"            <input type=\"checkbox\" id=\"forcePP4Refresh\" name=\"forcePP4\">"
-"            Force PP4 Protocol"
-"          </label>"
-"        </div>"
-"        "
-"        <button type=\"submit\">Refresh Display</button>"
-"      </form>"
-"    </div>"
-"  "
-"    <div id=\"SettingsTab\" class=\"tab-content\">"
-"      <h2>WiFi Settings</h2>"
-"      <form id=\"wifiForm\">"
-"        <div class=\"form-group\">"
-"          <label for=\"wifiSsid\">WiFi SSID:</label>"
-"          <input type=\"text\" id=\"wifiSsid\" name=\"ssid\" required>"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"wifiPassword\">WiFi Password:</label>"
-"          <input type=\"password\" id=\"wifiPassword\" name=\"password\">"
-"        </div>"
-"        "
-"        <div class=\"form-group\">"
-"          <label for=\"apMode\">"
-"            <input type=\"checkbox\" id=\"apMode\" name=\"apMode\">"
-"            Access Point Mode"
-"          </label>"
-"        </div>"
-"        "
-"        <button type=\"submit\">Save Settings</button>"
-"      </form>"
-"    </div>"
-"  "
-"    <div id=\"AboutTab\" class=\"tab-content\">"
-"      <h2>About ESL Blaster</h2>"
-"      <p>ESL Blaster is a device for communicating with electronic shelf labels (ESLs) using infrared signals.</p>"
-"      <p><strong>Hardware Version:</strong> <span id=\"hwVersion\">Loading...</span></p>"
-"      <p><strong>Firmware Version:</strong> <span id=\"fwVersion\">Loading...</span></p>"
-"      <p><strong>Uptime:</strong> <span id=\"uptime\">Loading...</span></p>"
-"      <p><strong>Free Memory:</strong> <span id=\"freeHeap\">Loading...</span></p>"
-"      <p><strong>Build Date:</strong> 2025-03-23</p>"
-"      <p><strong>Last Update:</strong> 2025-03-23 05:47:25 UTC</p>"
-"      <p><strong>System User:</strong> BipBoopImportant</p>"
-"      <h3>Hardware Setup</h3>"
-"      <p>IR Transmitter connected to GPIO4 (D2)</p>"
-"      <p>SSD1306 OLED Shield on I2C (SDA/SCL)</p>"
-"      <h3>Credits</h3>"
-"      <p>Based on work by furrtek (furrtek.org)</p>"
-"    </div>"
-"  </div>"
-"  "
-"  <div id=\"status-message\"></div>"
-"  "
-"  <script>"
-"    // Immediately invoked function to ensure proper scope"
-"    (function() {"
-"      console.log('Script loaded');"
-"      "
-"      // Wait for the DOM to be fully loaded"
-"      document.addEventListener('DOMContentLoaded', function() {"
-"        console.log('DOM fully loaded');"
-"        initializeApp();"
-"      });"
-"      "
-"      // If DOM is already loaded, initialize immediately"
-"      if (document.readyState === 'complete' || document.readyState === 'interactive') {"
-"        console.log('DOM already loaded, initializing immediately');"
-"        setTimeout(initializeApp, 1);"
-"      }"
-"      "
-"      function initializeApp() {"
-"        try {"
-"          // Tab functionality"
-"          const tabButtons = document.querySelectorAll('.tab-button');"
-"          const tabContents = document.querySelectorAll('.tab-content');"
-"          "
-"          console.log('Found tab buttons:', tabButtons.length);"
-"          console.log('Found tab contents:', tabContents.length);"
-"          "
-"          tabButtons.forEach(function(button) {"
-"            button.addEventListener('click', function() {"
-"              const target = this.getAttribute('data-target');"
-"              console.log('Tab clicked:', target);"
-"              "
-"              // Remove active class from all tabs"
-"              tabButtons.forEach(function(btn) {"
-"                btn.classList.remove('active');"
-"              });"
-"              tabContents.forEach(function(content) {"
-"                content.classList.remove('active');"
-"              });"
-"              "
-"              // Add active class to current tab"
-"              this.classList.add('active');"
-"              const targetContent = document.getElementById(target);"
-"              if (targetContent) {"
-"                targetContent.classList.add('active');"
-"              } else {"
-"                console.error('Target content not found:', target);"
-"              }"
-"              "
-"              // If About tab is selected, update the information"
-"              if (target === 'AboutTab') {"
-"                updateAboutInfo();"
-"              }"
-"            });"
-"          });"
-"          "
-"          // Status message display"
-"          function showStatus(message, isError) {"
-"            console.log('Status:', message, 'Error:', isError);"
-"            const statusDiv = document.getElementById('status-message');"
-"            if (!statusDiv) {"
-"              console.error('Status message div not found');"
-"              return;"
-"            }"
-"            statusDiv.textContent = message;"
-"            statusDiv.className = isError ? 'error' : 'success';"
-"            statusDiv.style.display = 'block';"
-"            "
-"            // Hide after 5 seconds"
-"            setTimeout(function() {"
-"              statusDiv.style.display = 'none';"
-"            }, 5000);"
-"          }"
-"          "
-"          // Form submissions"
-"          const forms = {"
-"            'imageForm': '/transmit-image',"
-"            'rawForm': '/raw-command',"
-"            'segmentForm': '/set-segments',"
-"            'pingForm': '/ping',"
-"            'refreshForm': '/refresh',"
-"            'wifiForm': '/wifi-config'"
-"          };"
-"          "
-"          // Process all forms"
-"          Object.keys(forms).forEach(function(formId) {"
-"            const form = document.getElementById(formId);"
-"            if (form) {"
-"              console.log('Found form:', formId);"
-"              form.addEventListener('submit', function(e) {"
-"                e.preventDefault();"
-"                console.log('Form submitted:', formId);"
-"                "
-"                // Special handling for image upload"
-"                if (formId === 'imageForm') {"
-"                  showStatus('Uploading and processing image...', false);"
-"                }"
-"                "
-"                // Create FormData object"
-"                const formData = new FormData(this);"
-"                "
-"                // Send the form data to the server"
-"                fetch(forms[formId], {"
-"                  method: 'POST',"
-"                  body: formData"
-"                })"
-"                .then(function(response) {"
-"                  return response.json();"
-"                })"
-"                .then(function(data) {"
-"                  if (data.success) {"
-"                    showStatus(data.message, false);"
-"                    "
-"                    // Special handling for WiFi settings"
-"                    if (formId === 'wifiForm' && data.success) {"
-"                      showStatus(data.message + ' Device will restart...', false);"
-"                      setTimeout(function() {"
-"                        window.location.reload();"
-"                      }, 5000);"
-"                    }"
-"                  } else {"
-"                    showStatus(data.error || 'An error occurred', true);"
-"                  }"
-"                })"
-"                .catch(function(error) {"
-"                  console.error('Error:', error);"
-"                  showStatus('Network error: ' + error.message, true);"
-"                });"
-"              });"
-"            } else {"
-"              console.error('Form not found:', formId);"
-"            }"
-"          });"
-"          "
-"          // Quick action buttons"
-"          const statusBtn = document.getElementById('statusBtn');"
-"          if (statusBtn) {"
-"            statusBtn.addEventListener('click', function() {"
-"              console.log('Status button clicked');"
-"              fetch('/status')"
-"                .then(function(response) {"
-"                  return response.json();"
-"                })"
-"                .then(function(data) {"
-"                  let statusMessage = 'Status:\\n';"
-"                  statusMessage += `WiFi: ${data.wifi_mode}\\n`;"
-"                  statusMessage += `Connected: ${data.connected}\\n`;"
-"                  statusMessage += `IP: ${data.ip}\\n`;"
-"                  statusMessage += `Uptime: ${formatUptime(data.uptime)}\\n`;"
-"                  statusMessage += `Free Heap: ${formatBytes(data.free_heap)}\\n`;"
-"                  statusMessage += `Frames Sent: ${data.frames_sent}\\n`;"
-"                  "
-"                  showStatus(statusMessage, false);"
-"                })"
-"                .catch(function(error) {"
-"                  console.error('Error:', error);"
-"                  showStatus('Network error: ' + error.message, true);"
-"                });"
-"            });"
-"          } else {"
-"            console.error('Status button not found');"
-"          }"
-"          "
-"          const testFreqBtn = document.getElementById('testFreqBtn');"
-"          if (testFreqBtn) {"
-"            testFreqBtn.addEventListener('click', function() {"
-"              console.log('Test frequency button clicked');"
-"              showStatus('Testing 1.25MHz signal for 5 seconds...', false);"
-"              fetch('/test-frequency')"
-"                .then(function(response) {"
-"                  return response.json();"
-"                })"
-"                .then(function(data) {"
-"                  showStatus(data.message, !data.success);"
-"                })"
-"                .catch(function(error) {"
-"                  console.error('Error:', error);"
-"                  showStatus('Network error: ' + error.message, true);"
-"                });"
-"            });"
-"          } else {"
-"            console.error('Test frequency button not found');"
-"          }"
-"          "
-"          const restartBtn = document.getElementById('restartBtn');"
-"          if (restartBtn) {"
-"            restartBtn.addEventListener('click', function() {"
-"              console.log('Restart button clicked');"
-"              if (confirm('Are you sure you want to restart the device?')) {"
-"                fetch('/restart', { method: 'POST' })"
-"                  .then(function(response) {"
-"                    return response.json();"
-"                  })"
-"                  .then(function(data) {"
-"                    showStatus(data.message, !data.success);"
-"                    "
-"                    if (data.success) {"
-"                      setTimeout(function() {"
-"                        window.location.reload();"
-"                      }, 5000);"
-"                    }"
-"                  })"
-"                  .catch(function(error) {"
-"                    console.error('Error:', error);"
-"                    showStatus('Network error: ' + error.message, true);"
-"                  });"
-"              }"
-"            });"
-"          } else {"
-"            console.error('Restart button not found');"
-"          }"
-"          "
-"          // About tab information"
-"          function updateAboutInfo() {"
-"            console.log('Updating About tab info');"
-"            fetch('/status')"
-"              .then(function(response) {"
-"                return response.json();"
-"              })"
-"              .then(function(data) {"
-"                document.getElementById('hwVersion').textContent = data.hw_version || 'A';"
-"                document.getElementById('fwVersion').textContent = data.fw_version || '1.0.0';"
-"                document.getElementById('uptime').textContent = formatUptime(data.uptime);"
-"                document.getElementById('freeHeap').textContent = formatBytes(data.free_heap);"
-"              })"
-"              .catch(function(error) {"
-"                console.error('Error updating about info:', error);"
-"                showStatus('Failed to update About info', true);"
-"              });"
-"          }"
-"          "
-"          // Initial update of About tab if it's active"
-"          if (document.querySelector('#AboutTab.active')) {"
-"            updateAboutInfo();"
-"          }"
-"          "
-"          console.log('App initialized successfully');"
-"        } catch (e) {"
-"          console.error('Error initializing app:', e);"
-"        }"
-"      }"
-"      "
-"      // Helper functions"
-"      function formatUptime(seconds) {"
-"        const days = Math.floor(seconds / 86400);"
-"        seconds %= 86400;"
-"        const hours = Math.floor(seconds / 3600);"
-"        seconds %= 3600;"
-"        const minutes = Math.floor(seconds / 60);"
-"        seconds %= 60;"
-"        "
-"        let result = '';"
-"        if (days > 0) result += days + ' days, ';"
-"        return result + hours + ':' + "
-"               minutes.toString().padStart(2, '0') + ':' + "
-"               seconds.toString().padStart(2, '0');"
-"      }"
-"      "
-"      function formatBytes(bytes) {"
-"        if (bytes < 1024) return bytes + ' bytes';"
-"        else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';"
-"        else return (bytes / 1048576).toFixed(2) + ' MB';"
-"      }"
-"    })();"
-"  </script>"
-"</body>"
-"</html>");
+  // More efficient way to serve HTML - build it in chunks to avoid memory issues
+  _server->setContentLength(CONTENT_LENGTH_UNKNOWN); // We don't know the size in advance
+  _server->send(200, "text/html", ""); // Start the response
 
-  sendHtmlResponse(html);
+  // Send HTML in chunks to avoid memory issues
+  _server->sendContent("<!DOCTYPE html><html lang=\"en\"><head>");
+  _server->sendContent("<meta charset=\"UTF-8\"><title>ESL Blaster</title>");
+  _server->sendContent("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+  _server->sendContent("<meta http-equiv=\"Cache-Control\" content=\"no-cache, no-store, must-revalidate\" />");
+  _server->sendContent("<meta http-equiv=\"Pragma\" content=\"no-cache\" /><meta http-equiv=\"Expires\" content=\"0\" />");
+  
+  // Send CSS
+  _server->sendContent("<style>");
+  _server->sendContent("* { box-sizing: border-box; }");
+  _server->sendContent("body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6; }");
+  _server->sendContent("h1, h2 { color: #2c3e50; margin-top: 0; }");
+  _server->sendContent("h1 { text-align: center; margin-bottom: 20px; }");
+  _server->sendContent(".tab-container { margin-bottom: 20px; }");
+  _server->sendContent(".tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid #ccc; margin-bottom: 0; }");
+  _server->sendContent(".tab-button { background-color: #f1f1f1; border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0; padding: 10px 15px; margin-right: 5px; margin-bottom: -1px; cursor: pointer; transition: 0.3s; position: relative; top: 1px; }");
+  _server->sendContent(".tab-button:hover { background-color: #ddd; }");
+  _server->sendContent(".tab-button.active { background-color: #3498db; color: white; border-bottom: 1px solid #3498db; }");
+  _server->sendContent(".tab-content { display: none; padding: 20px; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; background-color: #fff; }");
+  _server->sendContent(".tab-content.active { display: block; }");
+  _server->sendContent(".form-group { margin-bottom: 15px; }");
+  _server->sendContent("label { display: block; margin-bottom: 5px; font-weight: bold; }");
+  _server->sendContent("input[type=text], input[type=number], input[type=password], select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }");
+  _server->sendContent("button[type=submit], button[type=button] { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }");
+  _server->sendContent("button[type=submit]:hover, button[type=button]:hover { background-color: #2980b9; }");
+  _server->sendContent("#status-message { margin-top: 20px; padding: 15px; border-radius: 4px; display: none; }");
+  _server->sendContent(".success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }");
+  _server->sendContent(".error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }");
+  _server->sendContent(".quick-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }");
+  _server->sendContent(".quick-actions button { flex: 1; min-width: 150px; }");
+  _server->sendContent("</style></head><body>");
+  
+  // Send body content
+  _server->sendContent("<h1>ESL Blaster Control Panel</h1>");
+  
+  // Quick actions
+  _server->sendContent("<div class=\"quick-actions\">");
+  _server->sendContent("<button id=\"statusBtn\" type=\"button\">Device Status</button>");
+  _server->sendContent("<button id=\"restartBtn\" type=\"button\">Restart Device</button>");
+  _server->sendContent("<button id=\"testFreqBtn\" type=\"button\">Test 1.25MHz</button>");
+  _server->sendContent("</div>");
+  
+  // Tab container
+  _server->sendContent("<div class=\"tab-container\"><div class=\"tabs\">");
+  _server->sendContent("<button class=\"tab-button active\" data-target=\"ImageTab\">Image</button>");
+  _server->sendContent("<button class=\"tab-button\" data-target=\"RawTab\">Raw Command</button>");
+  _server->sendContent("<button class=\"tab-button\" data-target=\"SegmentTab\">Segments</button>");
+  _server->sendContent("<button class=\"tab-button\" data-target=\"PingTab\">Ping/Refresh</button>");
+  _server->sendContent("<button class=\"tab-button\" data-target=\"SettingsTab\">WiFi Settings</button>");
+  _server->sendContent("<button class=\"tab-button\" data-target=\"AboutTab\">About</button>");
+  _server->sendContent("</div>");
+  
+  // Image tab
+  _server->sendContent("<div id=\"ImageTab\" class=\"tab-content active\">");
+  _server->sendContent("<h2>Transmit Image to ESL</h2>");
+  _server->sendContent("<form id=\"imageForm\" enctype=\"multipart/form-data\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"barcode\">ESL Barcode (17 digits):</label>");
+  _server->sendContent("<input type=\"text\" id=\"barcode\" name=\"barcode\" required pattern=\".{17,17}\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"imageFile\">Image File:</label>");
+  _server->sendContent("<input type=\"file\" id=\"imageFile\" name=\"imageFile\" accept=\"image/*\" required></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"page\">Page (0-15):</label>");
+  _server->sendContent("<input type=\"number\" id=\"page\" name=\"page\" min=\"0\" max=\"15\" value=\"0\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"colorMode\">Color Mode:</label>");
+  _server->sendContent("<select id=\"colorMode\" name=\"colorMode\"><option value=\"0\">Black & White</option><option value=\"1\">Color</option></select></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"posX\">X Position:</label>");
+  _server->sendContent("<input type=\"number\" id=\"posX\" name=\"posX\" min=\"0\" value=\"0\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"posY\">Y Position:</label>");
+  _server->sendContent("<input type=\"number\" id=\"posY\" name=\"posY\" min=\"0\" value=\"0\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"forcePP4\">");
+  _server->sendContent("<input type=\"checkbox\" id=\"forcePP4\" name=\"forcePP4\">Force PP4 Protocol</label></div>");
+  _server->sendContent("<button type=\"submit\">Transmit Image</button></form></div>");
+  
+  // Raw Command tab
+  _server->sendContent("<div id=\"RawTab\" class=\"tab-content\">");
+  _server->sendContent("<h2>Send Raw Command</h2><form id=\"rawForm\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"rawBarcode\">ESL Barcode (17 digits):</label>");
+  _server->sendContent("<input type=\"text\" id=\"rawBarcode\" name=\"barcode\" required pattern=\".{17,17}\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"eslType\">ESL Type:</label>");
+  _server->sendContent("<select id=\"eslType\" name=\"type\"><option value=\"DM\">Dot Matrix (DM)</option><option value=\"SEG\">Segment (SEG)</option></select></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"hexData\">Hex Data (without first byte and CRC):</label>");
+  _server->sendContent("<textarea id=\"hexData\" name=\"hexData\" rows=\"4\" required></textarea></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"repeatCount\">Repeat Count:</label>");
+  _server->sendContent("<input type=\"number\" id=\"repeatCount\" name=\"repeatCount\" min=\"1\" value=\"1\"></div>");
+  _server->sendContent("<button type=\"submit\">Send Command</button></form></div>");
+  
+  // Segment tab
+  _server->sendContent("<div id=\"SegmentTab\" class=\"tab-content\">");
+  _server->sendContent("<h2>Set Segments</h2><form id=\"segmentForm\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"segBarcode\">ESL Barcode (17 digits):</label>");
+  _server->sendContent("<input type=\"text\" id=\"segBarcode\" name=\"barcode\" required pattern=\".{17,17}\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"bitmap\">Segment Bitmap (46 hex digits):</label>");
+  _server->sendContent("<textarea id=\"bitmap\" name=\"bitmap\" rows=\"4\" required pattern=\"[0-9A-Fa-f]{46}\"></textarea></div>");
+  _server->sendContent("<button type=\"submit\">Set Segments</button></form></div>");
+  
+  // Ping tab
+  _server->sendContent("<div id=\"PingTab\" class=\"tab-content\">");
+  _server->sendContent("<h2>Ping & Refresh ESLs</h2><form id=\"pingForm\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"pingBarcode\">ESL Barcode (17 digits):</label>");
+  _server->sendContent("<input type=\"text\" id=\"pingBarcode\" name=\"barcode\" required pattern=\".{17,17}\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"forcePP4Ping\">");
+  _server->sendContent("<input type=\"checkbox\" id=\"forcePP4Ping\" name=\"forcePP4\">Force PP4 Protocol</label></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"repeatCountPing\">Repeat Count:</label>");
+  _server->sendContent("<input type=\"number\" id=\"repeatCountPing\" name=\"repeatCount\" min=\"1\" value=\"400\"></div>");
+  _server->sendContent("<button type=\"submit\">Send Ping</button></form>");
+  _server->sendContent("<h2>Refresh Display</h2><form id=\"refreshForm\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"refreshBarcode\">ESL Barcode (17 digits):</label>");
+  _server->sendContent("<input type=\"text\" id=\"refreshBarcode\" name=\"barcode\" required pattern=\".{17,17}\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"forcePP4Refresh\">");
+  _server->sendContent("<input type=\"checkbox\" id=\"forcePP4Refresh\" name=\"forcePP4\">Force PP4 Protocol</label></div>");
+  _server->sendContent("<button type=\"submit\">Refresh Display</button></form></div>");
+  
+  // Settings tab
+  _server->sendContent("<div id=\"SettingsTab\" class=\"tab-content\">");
+  _server->sendContent("<h2>WiFi Settings</h2><form id=\"wifiForm\">");
+  _server->sendContent("<div class=\"form-group\"><label for=\"wifiSsid\">WiFi SSID:</label>");
+  _server->sendContent("<input type=\"text\" id=\"wifiSsid\" name=\"ssid\" required></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"wifiPassword\">WiFi Password:</label>");
+  _server->sendContent("<input type=\"password\" id=\"wifiPassword\" name=\"password\"></div>");
+  _server->sendContent("<div class=\"form-group\"><label for=\"apMode\">");
+  _server->sendContent("<input type=\"checkbox\" id=\"apMode\" name=\"apMode\">Access Point Mode</label></div>");
+  _server->sendContent("<button type=\"submit\">Save Settings</button></form></div>");
+  
+  // About tab
+  _server->sendContent("<div id=\"AboutTab\" class=\"tab-content\">");
+  _server->sendContent("<h2>About ESL Blaster</h2>");
+  _server->sendContent("<p>ESL Blaster is a device for communicating with electronic shelf labels (ESLs) using infrared signals.</p>");
+  _server->sendContent("<p><strong>Hardware Version:</strong> <span id=\"hwVersion\">Loading...</span></p>");
+  _server->sendContent("<p><strong>Firmware Version:</strong> <span id=\"fwVersion\">Loading...</span></p>");
+  _server->sendContent("<p><strong>Uptime:</strong> <span id=\"uptime\">Loading...</span></p>");
+  _server->sendContent("<p><strong>Free Memory:</strong> <span id=\"freeHeap\">Loading...</span></p>");
+  _server->sendContent("<p><strong>Build Date:</strong> 2025-03-23</p><p><strong>Last Update:</strong> 2025-03-23 05:47:25 UTC</p>");
+  _server->sendContent("<p><strong>System User:</strong> BipBoopImportant</p>");
+  _server->sendContent("<h3>Hardware Setup</h3><p>IR Transmitter connected to GPIO4 (D2)</p>");
+  _server->sendContent("<p>SSD1306 OLED Shield on I2C (SDA/SCL)</p>");
+  _server->sendContent("<h3>Credits</h3><p>Based on work by furrtek (furrtek.org)</p></div>");
+  
+  _server->sendContent("</div>"); // Close tab container
+  
+  // Status message div
+  _server->sendContent("<div id=\"status-message\"></div>");
+  
+  // JavaScript - break into smaller sections to avoid memory issues
+  _server->sendContent("<script>");
+  // Part 1: Initial setup and functions
+  _server->sendContent("(function() { console.log('Script loaded');");
+  _server->sendContent("document.addEventListener('DOMContentLoaded', function() { console.log('DOM loaded'); initializeApp(); });");
+  _server->sendContent("if (document.readyState === 'complete' || document.readyState === 'interactive') {");
+  _server->sendContent("  console.log('DOM already loaded'); setTimeout(initializeApp, 1); }");
+  
+  // Part 2: Main app function
+  _server->sendContent("function initializeApp() { try {");
+  _server->sendContent("  const tabButtons = document.querySelectorAll('.tab-button');");
+  _server->sendContent("  const tabContents = document.querySelectorAll('.tab-content');");
+  _server->sendContent("  console.log('Tabs:', tabButtons.length, tabContents.length);");
+  
+  // Part 3: Tab functionality
+  _server->sendContent("  tabButtons.forEach(function(button) {");
+  _server->sendContent("    button.addEventListener('click', function() {");
+  _server->sendContent("      const target = this.getAttribute('data-target');");
+  _server->sendContent("      console.log('Tab:', target);");
+  _server->sendContent("      tabButtons.forEach(function(btn) { btn.classList.remove('active'); });");
+  _server->sendContent("      tabContents.forEach(function(content) { content.classList.remove('active'); });");
+  _server->sendContent("      this.classList.add('active');");
+  _server->sendContent("      const targetContent = document.getElementById(target);");
+  _server->sendContent("      if (targetContent) { targetContent.classList.add('active');");
+  _server->sendContent("        if (target === 'AboutTab') { updateAboutInfo(); }");
+  _server->sendContent("      } else { console.error('Missing:', target); }");
+  _server->sendContent("    });");
+  _server->sendContent("  });");
+  
+  // Part 4: Status and form functions
+  _server->sendContent("  function showStatus(message, isError) {");
+  _server->sendContent("    console.log('Status:', message);");
+  _server->sendContent("    const statusDiv = document.getElementById('status-message');");
+  _server->sendContent("    if (!statusDiv) { console.error('Status div missing'); return; }");
+  _server->sendContent("    statusDiv.textContent = message;");
+  _server->sendContent("    statusDiv.className = isError ? 'error' : 'success';");
+  _server->sendContent("    statusDiv.style.display = 'block';");
+  _server->sendContent("    setTimeout(function() { statusDiv.style.display = 'none'; }, 5000);");
+  _server->sendContent("  }");
+  
+  // Part 5: Forms and event handlers
+  _server->sendContent("  const forms = {");
+  _server->sendContent("    'imageForm': '/transmit-image',");
+  _server->sendContent("    'rawForm': '/raw-command',");
+  _server->sendContent("    'segmentForm': '/set-segments',");
+  _server->sendContent("    'pingForm': '/ping',");
+  _server->sendContent("    'refreshForm': '/refresh',");
+  _server->sendContent("    'wifiForm': '/wifi-config'");
+  _server->sendContent("  };");
+  
+  // Part 6: Form handlers
+  _server->sendContent("  Object.keys(forms).forEach(function(formId) {");
+  _server->sendContent("    const form = document.getElementById(formId);");
+  _server->sendContent("    if (form) {");
+  _server->sendContent("      form.addEventListener('submit', function(e) {");
+  _server->sendContent("        e.preventDefault();");
+  _server->sendContent("        if (formId === 'imageForm') { showStatus('Uploading...', false); }");
+  _server->sendContent("        const formData = new FormData(this);");
+  _server->sendContent("        fetch(forms[formId], { method: 'POST', body: formData })");
+  _server->sendContent("          .then(function(response) { return response.json(); })");
+  _server->sendContent("          .then(function(data) {");
+  _server->sendContent("            if (data.success) {");
+  _server->sendContent("              showStatus(data.message, false);");
+  _server->sendContent("              if (formId === 'wifiForm' && data.success) {");
+  _server->sendContent("                showStatus(data.message + ' Restarting...', false);");
+  _server->sendContent("                setTimeout(function() { window.location.reload(); }, 5000);");
+  _server->sendContent("              }");
+  _server->sendContent("            } else { showStatus(data.error || 'Error', true); }");
+  _server->sendContent("          })");
+  _server->sendContent("          .catch(function(error) {");
+  _server->sendContent("            console.error('Error:', error);");
+  _server->sendContent("            showStatus('Network error: ' + error.message, true);");
+  _server->sendContent("          });");
+  _server->sendContent("      });");
+  _server->sendContent("    } else { console.error('Form not found:', formId); }");
+  _server->sendContent("  });");
+  
+  // Part 7: Quick action buttons
+  _server->sendContent("  const statusBtn = document.getElementById('statusBtn');");
+  _server->sendContent("  if (statusBtn) {");
+  _server->sendContent("    statusBtn.addEventListener('click', function() {");
+  _server->sendContent("      fetch('/status')");
+  _server->sendContent("        .then(function(response) { return response.json(); })");
+  _server->sendContent("        .then(function(data) {");
+  _server->sendContent("          let statusMessage = 'Status:\\n';");
+  _server->sendContent("          statusMessage += `WiFi: ${data.wifi_mode}\\n`;");
+  _server->sendContent("          statusMessage += `Connected: ${data.connected}\\n`;");
+  _server->sendContent("          statusMessage += `IP: ${data.ip}\\n`;");
+  _server->sendContent("          statusMessage += `Uptime: ${formatUptime(data.uptime)}\\n`;");
+  _server->sendContent("          statusMessage += `Free Heap: ${formatBytes(data.free_heap)}\\n`;");
+  _server->sendContent("          statusMessage += `Frames Sent: ${data.frames_sent}\\n`;");
+  _server->sendContent("          showStatus(statusMessage, false);");
+  _server->sendContent("        })");
+  _server->sendContent("        .catch(function(error) {");
+  _server->sendContent("          showStatus('Network error: ' + error.message, true);");
+  _server->sendContent("        });");
+  _server->sendContent("    });");
+  _server->sendContent("  }");
+  
+  // Part 8: Test frequency button
+  _server->sendContent("  const testFreqBtn = document.getElementById('testFreqBtn');");
+  _server->sendContent("  if (testFreqBtn) {");
+  _server->sendContent("    testFreqBtn.addEventListener('click', function() {");
+  _server->sendContent("      showStatus('Testing for 5 seconds...', false);");
+  _server->sendContent("      fetch('/test-frequency')");
+  _server->sendContent("        .then(function(response) { return response.json(); })");
+  _server->sendContent("        .then(function(data) {");
+  _server->sendContent("          showStatus(data.message, !data.success);");
+  _server->sendContent("        })");
+  _server->sendContent("        .catch(function(error) {");
+  _server->sendContent("          showStatus('Error: ' + error.message, true);");
+  _server->sendContent("        });");
+  _server->sendContent("    });");
+  _server->sendContent("  }");
+  
+  // Part 9: Restart button
+  _server->sendContent("  const restartBtn = document.getElementById('restartBtn');");
+  _server->sendContent("  if (restartBtn) {");
+  _server->sendContent("    restartBtn.addEventListener('click', function() {");
+  _server->sendContent("      if (confirm('Restart device?')) {");
+  _server->sendContent("        fetch('/restart', { method: 'POST' })");
+  _server->sendContent("          .then(function(response) { return response.json(); })");
+  _server->sendContent("          .then(function(data) {");
+  _server->sendContent("            showStatus(data.message, !data.success);");
+  _server->sendContent("            if (data.success) {");
+  _server->sendContent("              setTimeout(function() { window.location.reload(); }, 5000);");
+  _server->sendContent("            }");
+  _server->sendContent("          })");
+  _server->sendContent("          .catch(function(error) {");
+  _server->sendContent("            showStatus('Error: ' + error.message, true);");
+  _server->sendContent("          });");
+  _server->sendContent("      }");
+  _server->sendContent("    });");
+  _server->sendContent("  }");
+  
+  // Part 10: About tab info
+  _server->sendContent("  function updateAboutInfo() {");
+  _server->sendContent("    fetch('/status')");
+  _server->sendContent("      .then(function(response) { return response.json(); })");
+  _server->sendContent("      .then(function(data) {");
+  _server->sendContent("        document.getElementById('hwVersion').textContent = data.hw_version || 'A';");
+  _server->sendContent("        document.getElementById('fwVersion').textContent = data.fw_version || '1.0.0';");
+  _server->sendContent("        document.getElementById('uptime').textContent = formatUptime(data.uptime);");
+  _server->sendContent("        document.getElementById('freeHeap').textContent = formatBytes(data.free_heap);");
+  _server->sendContent("      })");
+  _server->sendContent("      .catch(function(error) {");
+  _server->sendContent("        console.error('Error updating about info:', error);");
+  _server->sendContent("      });");
+  _server->sendContent("  }");
+  
+  // Part 11: Initialize and utility functions
+  _server->sendContent("  if (document.querySelector('#AboutTab.active')) { updateAboutInfo(); }");
+  _server->sendContent("  } catch (e) { console.error('Error:', e); }");
+  _server->sendContent("}");
+  
+  // Part 12: Helper functions
+  _server->sendContent("function formatUptime(seconds) {");
+  _server->sendContent("  const days = Math.floor(seconds / 86400);");
+  _server->sendContent("  seconds %= 86400;");
+  _server->sendContent("  const hours = Math.floor(seconds / 3600);");
+  _server->sendContent("  seconds %= 3600;");
+  _server->sendContent("  const minutes = Math.floor(seconds / 60);");
+  _server->sendContent("  seconds %= 60;");
+  _server->sendContent("  let result = '';");
+  _server->sendContent("  if (days > 0) result += days + ' days, ';");
+  _server->sendContent("  return result + hours + ':' + minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');");
+  _server->sendContent("}");
+  
+  _server->sendContent("function formatBytes(bytes) {");
+  _server->sendContent("  if (bytes < 1024) return bytes + ' bytes';");
+  _server->sendContent("  else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';");
+  _server->sendContent("  else return (bytes / 1048576).toFixed(2) + ' MB';");
+  _server->sendContent("}");
+  
+  // End script and HTML
+  _server->sendContent("})();</script></body></html>");
 }
 
 void WebInterface::handleTransmitImage() {
