@@ -154,49 +154,86 @@ void ESLProtocol::terminateFrame(uint8_t* frame, uint16_t frameLength, bool pp16
 
 void ESLProtocol::compressImage(uint8_t* inputData, uint16_t width, uint16_t height, 
                                uint8_t* outputData, uint16_t* outputSize, bool colorMode) {
+  // This is an implementation of run-length encoding similar to the Python script
   uint16_t pixelCount = width * height;
   uint16_t totalPixels = colorMode ? pixelCount * 2 : pixelCount;
   uint16_t outputIdx = 0;
   
-  // More memory-efficient RLE implementation
-  for (uint16_t i = 0; i < totalPixels;) {
-    // Get current pixel
-    uint8_t runPixel = inputData[i++];
-    outputData[outputIdx++] = runPixel;
-    
-    // Find run length
-    uint16_t runCount = 1;
-    while (i < totalPixels && inputData[i] == runPixel && runCount < 16383) {
+  // First pixel value
+  uint8_t runPixel = inputData[0];
+  outputData[outputIdx++] = runPixel;
+  
+  uint16_t runCount = 1;
+  
+  // Process each pixel
+  for (uint16_t i = 1; i < totalPixels; i++) {
+    if (inputData[i] == runPixel) {
+      // Continue the run
       runCount++;
-      i++;
-    }
-    
-    // Encode run length if more than 1
-    if (runCount > 1) {
-      // Get bit count
+    } else {
+      // End of run, encode the count
+      // Zero length coding - each bit preceded by a 0, except the first bit
+      uint8_t bits[16]; // More than enough for 16-bit integer
       uint8_t bitCount = 0;
-      uint16_t temp = runCount;
       
-      while (temp) {
-        bitCount++;
-        temp >>= 1;
+      // Convert run count to binary
+      uint16_t tempCount = runCount;
+      while (tempCount) {
+        bits[bitCount++] = tempCount & 1;
+        tempCount >>= 1;
       }
       
-      // Write zero bits for all but the first bit
+      // Reverse the bits (they were added in reverse order)
+      for (uint8_t j = 0; j < bitCount / 2; j++) {
+        uint8_t temp = bits[j];
+        bits[j] = bits[bitCount - j - 1];
+        bits[bitCount - j - 1] = temp;
+      }
+      
+      // Output the zero-length encoded bits
       for (uint8_t j = 1; j < bitCount; j++) {
-        outputData[outputIdx++] = 0;
+        outputData[outputIdx++] = 0; // Zero prefix for all bits except first
       }
       
-      // Write the bits from MSB to LSB
-      for (int8_t j = bitCount - 1; j >= 0; j--) {
-        outputData[outputIdx++] = (runCount >> j) & 1;
+      // Output the actual bits
+      for (uint8_t j = 0; j < bitCount; j++) {
+        outputData[outputIdx++] = bits[j];
       }
+      
+      // Start a new run
+      runPixel = inputData[i];
+      runCount = 1;
     }
-    
-    // Allow for background tasks
-    if (i % 256 == 0) yield();
   }
   
+  // Encode the final run if there is one
+  if (runCount > 1) {
+    // Zero length coding as above
+    uint8_t bits[16];
+    uint8_t bitCount = 0;
+    
+    uint16_t tempCount = runCount;
+    while (tempCount) {
+      bits[bitCount++] = tempCount & 1;
+      tempCount >>= 1;
+    }
+    
+    for (uint8_t j = 0; j < bitCount / 2; j++) {
+      uint8_t temp = bits[j];
+      bits[j] = bits[bitCount - j - 1];
+      bits[bitCount - j - 1] = temp;
+    }
+    
+    for (uint8_t j = 1; j < bitCount; j++) {
+      outputData[outputIdx++] = 0;
+    }
+    
+    for (uint8_t j = 0; j < bitCount; j++) {
+      outputData[outputIdx++] = bits[j];
+    }
+  }
+  
+  // Set final output size
   *outputSize = outputIdx;
 }
 
@@ -215,73 +252,80 @@ bool ESLProtocol::transmitImage(const char* barcodeStr, uint8_t* imageData,
   
   // ESLs only accept images with pixel counts multiple of 8
   if (pixelCount & 7) {
-    Serial.println(F("Image pixel count must be a multiple of 8"));
+    Serial.println("Image pixel count must be a multiple of 8");
     return false;
   }
   
-  // Allocate memory once and reuse for all operations
-  uint32_t maxSize = pixelCount * (colorMode ? 2 : 1);
-  uint8_t* compressedData = nullptr;
-  uint8_t* finalData = nullptr;
-  bool success = false;
+  // Prepare raw and compressed data buffers
+  uint8_t* rawPixels = new uint8_t[pixelCount * (colorMode ? 2 : 1)];
+  if (!rawPixels) {
+    Serial.println("Memory allocation failed for raw pixels");
+    return false;
+  }
   
-  // Start with a modest allocation for compressed data
-  compressedData = (uint8_t*)malloc(pixelCount * 1.5); // Typical compression is 50%
+  // Convert image data to bit array
+  // This is simplified - in a real implementation you'd process the actual image data
+  for (uint16_t i = 0; i < pixelCount; i++) {
+    // For simplicity, we'll just copy the provided data
+    rawPixels[i] = imageData[i];
+  }
   
+  // If color mode, append a second pass
+  if (colorMode) {
+    for (uint16_t i = 0; i < pixelCount; i++) {
+      // This would be the color extraction logic in a real implementation
+      rawPixels[pixelCount + i] = imageData[pixelCount + i];
+    }
+  }
+  
+  // Compress the image data
+  uint8_t* compressedData = new uint8_t[pixelCount * 2]; // Worst case size
   if (!compressedData) {
-    Serial.println(F("Memory allocation failed for compressed data"));
+    delete[] rawPixels;
+    Serial.println("Memory allocation failed for compressed data");
     return false;
   }
   
   uint16_t compressedSize = 0;
-  compressImage(imageData, width, height, compressedData, &compressedSize, colorMode);
+  compressImage(rawPixels, width, height, compressedData, &compressedSize, colorMode);
   
   // Decide whether to use compression based on size
+  uint8_t* finalData;
+  uint16_t finalSize;
   uint8_t compressionType;
   
-  if (compressedSize < maxSize) {
+  if (compressedSize < pixelCount * (colorMode ? 2 : 1)) {
     Serial.printf("Compression ratio: %.1f%% (%d -> %d bytes)\n", 
-                 100 - ((compressedSize * 100.0f) / maxSize), 
-                 maxSize, compressedSize);
+                 100 - ((compressedSize * 100) / float(pixelCount * (colorMode ? 2 : 1))), 
+                 pixelCount * (colorMode ? 2 : 1), compressedSize);
     finalData = compressedData;
-    compressedSize = (compressedSize + 7) & ~7; // Round up to multiple of 8
+    finalSize = compressedSize;
     compressionType = 2; // Zero-length coding
   } else {
-    Serial.println(F("Compression ineffective, using raw data"));
-    finalData = imageData;
-    compressedSize = maxSize;
+    Serial.println("Compression ratio poor, using raw data");
+    finalData = rawPixels;
+    finalSize = pixelCount * (colorMode ? 2 : 1);
     compressionType = 0; // Raw data
   }
   
   // Calculate frames needed
   const int bytesPerFrame = 20;
-  int frameCount = (compressedSize + bytesPerFrame - 1) / bytesPerFrame;
+  int frameCount = (finalSize + bytesPerFrame - 1) / bytesPerFrame;
   
-  // Make all frames and parameters first, then transmit
-  // This allows retry without recalculating
-  uint8_t pingFrame[64];
-  uint8_t paramFrame[64];
-  uint8_t* dataFrames = (uint8_t*)malloc(frameCount * 32); // Max 32 bytes per frame
-  uint8_t refreshFrame[64];
-  uint8_t pingSize, paramSize, refreshSize;
-  uint8_t* dataSizes = (uint8_t*)malloc(frameCount);
+  // Prepare to send frames
+  uint8_t frameData[256];
+  uint8_t frameSize;
   
-  if (!dataFrames || !dataSizes) {
-    Serial.println(F("Memory allocation failed for frame buffers"));
-    free(compressedData);
-    if (dataFrames) free(dataFrames);
-    if (dataSizes) free(dataSizes);
-    return false;
-  }
+  // 1. Wake-up ping frame
+  createPingFrame(PLID, pp16, 400, frameData, &frameSize);
+  _irTransmitter->transmitFrame(frameData, frameSize, 400);
+  yield();
   
-  // 1. Prepare wake-up ping frame
-  createPingFrame(PLID, pp16, 400, pingFrame, &pingSize);
-  
-  // 2. Prepare parameters frame
+  // 2. Parameters frame
   uint8_t paramData[32] = {0};
   
   // Total byte count
-  appendWord(paramData, 0, compressedSize / 8);
+  appendWord(paramData, 0, finalSize / 8);
   paramData[2] = 0x00;              // Unused
   paramData[3] = compressionType;   // Compression type
   paramData[4] = page;              // Page number
@@ -297,86 +341,40 @@ bool ESLProtocol::transmitImage(const char* barcodeStr, uint8_t* imageData,
   paramData[20] = 0x00;
   paramData[21] = 0x00;
   
-  createMCUFrame(PLID, 0x05, paramData, 22, pp16, 1, paramFrame, &paramSize);
+  createMCUFrame(PLID, 0x05, paramData, 22, pp16, 1, frameData, &frameSize);
+  _irTransmitter->transmitFrame(frameData, frameSize, 1);
+  yield();
   
-  // 3. Prepare data frames
+  // 3. Data frames
   for (int fr = 0; fr < frameCount; fr++) {
     uint8_t dataFrameData[24] = {0};
     appendWord(dataFrameData, 0, fr); // Frame number
     
     // Calculate how many bytes to copy for this frame
-    int bytesToCopy = min((int)bytesPerFrame, (int)(compressedSize - (fr * bytesPerFrame)));
+    int bytesToCopy = min((int)bytesPerFrame, (int)(finalSize - (fr * bytesPerFrame)));
     
     // Copy data
     memcpy(&dataFrameData[2], &finalData[fr * bytesPerFrame], bytesToCopy);
     
-    createMCUFrame(PLID, 0x20, dataFrameData, 2 + bytesToCopy, pp16, 1, 
-                  &dataFrames[fr * 32], &dataSizes[fr]);
+    createMCUFrame(PLID, 0x20, dataFrameData, 2 + bytesToCopy, pp16, 1, frameData, &frameSize);
+    _irTransmitter->transmitFrame(frameData, frameSize, 1);
+    yield();
   }
   
-  // 4. Prepare refresh frame
+  // 4. Refresh frame
   uint8_t refreshData[22];
-  memset(refreshData, 0, sizeof(refreshData));
-  createMCUFrame(PLID, 0x01, refreshData, 22, pp16, 1, refreshFrame, &refreshSize);
-  
-  // Now transmit with retry capability
-  int maxRetries = 3;
-  int currentRetry = 0;
-  bool transmitSuccess = false;
-  
-  while (currentRetry < maxRetries && !transmitSuccess) {
-    if (currentRetry > 0) {
-      Serial.printf("Retry %d of %d...\n", currentRetry, maxRetries);
-    }
-    
-    // 1. Send wake-up ping frame
-    _irTransmitter->transmitFrame(pingFrame, pingSize, 400);
-    yield();
-    
-    // 2. Send parameters frame
-    _irTransmitter->transmitFrame(paramFrame, paramSize, 1);
-    yield();
-    
-    // 3. Send data frames
-    bool dataFramesFailed = false;
-    for (int fr = 0; fr < frameCount; fr++) {
-      _irTransmitter->transmitFrame(&dataFrames[fr * 32], dataSizes[fr], 1);
-      
-      // Check for busy state (indicates transmission issue)
-      if (_irTransmitter->isBusy()) {
-        Serial.printf("Frame %d transmission error\n", fr);
-        dataFramesFailed = true;
-        break;
-      }
-      
-      yield();
-    }
-    
-    if (dataFramesFailed) {
-      currentRetry++;
-      delay(100 * currentRetry); // Gradually increase delay between retries
-      continue;
-    }
-    
-    // 4. Send refresh frame
-    _irTransmitter->transmitFrame(refreshFrame, refreshSize, 1);
-    
-    // If we made it here, everything transmitted successfully
-    transmitSuccess = true;
+  for (int i = 0; i < 22; i++) {
+    refreshData[i] = 0x00;
   }
+  
+  createMCUFrame(PLID, 0x01, refreshData, 22, pp16, 1, frameData, &frameSize);
+  _irTransmitter->transmitFrame(frameData, frameSize, 1);
   
   // Clean up
-  free(compressedData);
-  free(dataFrames);
-  free(dataSizes);
+  delete[] rawPixels;
+  delete[] compressedData;
   
-  success = transmitSuccess;
-  
-  if (!success) {
-    Serial.println(F("Failed to transmit image after retries"));
-  }
-  
-  return success;
+  return true;
 }
 
 bool ESLProtocol::transmitRawCommand(const char* barcodeStr, const char* typeStr, 

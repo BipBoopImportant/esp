@@ -16,97 +16,27 @@ WebInterface::WebInterface(ESP8266WebServer* server, IRTransmitter* irTransmitte
   _irTransmitter = irTransmitter;
   _oledInterface = oledInterface;
   _eslProtocol = new ESLProtocol(irTransmitter);
-  
-  // Pre-allocate buffer for image processing
-  // This avoids repeated new/delete during image processing
-  _imageBuffer = (uint8_t*)malloc(MAX_IMAGE_BUFFER_SIZE);
-}
-
-// Add destructor to free memory
-WebInterface::~WebInterface() {
-  if (_imageBuffer) {
-    free(_imageBuffer);
-    _imageBuffer = nullptr;
-  }
-  
-  if (_eslProtocol) {
-    delete _eslProtocol;
-    _eslProtocol = nullptr;
-  }
 }
 
 void WebInterface::setupRoutes() {
-  // Add GZIP support for static content
-  _server->enableCORS(true);
-  
-  // Main routes with authentication
-  _server->on("/", HTTP_GET, [this]() { 
-    if (!checkAuth()) return;
-    this->handleRoot(); 
-  });
+  _server->on("/", HTTP_GET, [this]() { this->handleRoot(); });
   
   // File upload handling requires special configuration
   _server->on("/transmit-image", HTTP_POST, 
-    [this](){ 
-      if (!checkAuth()) return;
-      this->sendSuccessResponse("Image upload complete"); 
-    },
-    [this](){ 
-      if (!checkAuth()) return;
-      this->handleTransmitImage(); 
-    }
+    [this](){ this->sendSuccessResponse("Image upload complete"); },
+    [this](){ this->handleTransmitImage(); }
   );
   
-  _server->on("/raw-command", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handleRawCommand(); 
-  });
-  
-  _server->on("/set-segments", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handleSetSegments(); 
-  });
-  
-  _server->on("/ping", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handlePing(); 
-  });
-  
-  _server->on("/refresh", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handleRefresh(); 
-  });
-  
-  _server->on("/wifi-config", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handleWifiConfig(); 
-  });
-  
-  _server->on("/restart", HTTP_POST, [this]() { 
-    if (!checkAuth()) return;
-    this->handleRestart(); 
-  });
-  
-  _server->on("/status", HTTP_GET, [this]() { 
-    if (!checkAuth()) return;
-    this->handleStatus(); 
-  });
-  
-  _server->on("/test-frequency", HTTP_GET, [this]() { 
-    if (!checkAuth()) return;
-    this->handleTestFrequency(); 
-  });
+  _server->on("/raw-command", HTTP_POST, [this]() { this->handleRawCommand(); });
+  _server->on("/set-segments", HTTP_POST, [this]() { this->handleSetSegments(); });
+  _server->on("/ping", HTTP_POST, [this]() { this->handlePing(); });
+  _server->on("/refresh", HTTP_POST, [this]() { this->handleRefresh(); });
+  _server->on("/wifi-config", HTTP_POST, [this]() { this->handleWifiConfig(); });
+  _server->on("/restart", HTTP_POST, [this]() { this->handleRestart(); });
+  _server->on("/status", HTTP_GET, [this]() { this->handleStatus(); });
+  _server->on("/test-frequency", HTTP_GET, [this]() { this->handleTestFrequency(); });
   
   _server->onNotFound([this]() { this->handleNotFound(); });
-}
-
-// Authentication check function
-bool WebInterface::checkAuth() {
-  if (!_server->authenticate(authUsername, authPassword)) {
-    _server->requestAuthentication(DIGEST_AUTH, realm);
-    return false;
-  }
-  return true;
 }
 
 void WebInterface::handleRoot() {
@@ -541,26 +471,19 @@ bool WebInterface::handleFileUpload() {
   return true;
 }
 
-// Optimize image processing with pre-allocated buffers
 bool WebInterface::processImage(const char* filename, uint8_t** imageData, 
                               uint16_t* width, uint16_t* height, bool colorMode) {
-  // Use pre-allocated buffer to avoid memory fragmentation
-  if (!_imageBuffer) {
-    Serial.println(F("Image buffer not allocated"));
-    return false;
-  }
-  
   // Open the uploaded file
   File file = LittleFS.open(filename, "r");
   if (!file) {
-    Serial.println(F("Failed to open file for reading"));
+    Serial.println("Failed to open file for reading");
     return false;
   }
   
   // Check file size
   size_t fileSize = file.size();
   if (fileSize < 54) { // Minimum size for a BMP header
-    Serial.println(F("File too small to be a valid image"));
+    Serial.println("File too small to be a valid image");
     file.close();
     return false;
   }
@@ -571,7 +494,7 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
   
   // Check if it's a valid BMP
   if (header[0] != 'B' || header[1] != 'M') {
-    Serial.println(F("Not a valid BMP file"));
+    Serial.println("Not a valid BMP file");
     file.close();
     return false;
   }
@@ -580,45 +503,26 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
   *width = header[18] | (header[19] << 8) | (header[20] << 16) | (header[21] << 24);
   *height = header[22] | (header[23] << 8) | (header[24] << 16) | (header[25] << 24);
   
-  // Safety check for dimensions
-  if (*width == 0 || *height == 0 || *width > 1024 || *height > 1024) {
-    Serial.println(F("Invalid image dimensions"));
-    file.close();
-    return false;
-  }
-  
   // Extract bits per pixel
   uint16_t bpp = header[28] | (header[29] << 8);
-  
-  // Check supported bit depths
-  if (bpp != 24 && bpp != 8) {
-    Serial.printf("Unsupported bits per pixel: %d\n", bpp);
-    file.close();
-    return false;
-  }
   
   // Calculate row size and padding
   uint32_t rowSize = ((*width * bpp + 31) / 32) * 4;
   
-  // Calculate pixel data size
+  // Allocate memory for the image
   uint32_t pixelDataSize = *width * *height;
-  
-  // Check buffer size
-  if (pixelDataSize > MAX_IMAGE_BUFFER_SIZE/2) {
-    Serial.println(F("Image too large for buffer"));
+  uint8_t* pixels = new uint8_t[pixelDataSize];
+  if (!pixels) {
+    Serial.println("Failed to allocate memory for image");
     file.close();
     return false;
   }
   
-  // Use the first half of our pre-allocated buffer for pixels
-  uint8_t* pixels = _imageBuffer;
-  
-  // Read pixel data efficiently
+  // Read pixel data
   if (bpp == 24) { // True color image
-    // Allocate buffer for a single row
     uint8_t* row = new uint8_t[rowSize];
     if (!row) {
-      Serial.println(F("Failed to allocate row buffer"));
+      delete[] pixels;
       file.close();
       return false;
     }
@@ -633,12 +537,9 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
         uint8_t g = row[x * 3 + 1];
         uint8_t r = row[x * 3 + 2];
         
-        // Weighted conversion to grayscale with faster integer math
+        // Weighted conversion to grayscale
         pixels[y * *width + x] = (r * 77 + g * 150 + b * 29) >> 8;
       }
-      
-      // Let ESP handle background tasks during large image processing
-      if (y % 32 == 0) yield();
     }
     
     delete[] row;
@@ -646,7 +547,7 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
   else if (bpp == 8) { // Grayscale or palette
     uint8_t* row = new uint8_t[rowSize];
     if (!row) {
-      Serial.println(F("Failed to allocate row buffer"));
+      delete[] pixels;
       file.close();
       return false;
     }
@@ -663,12 +564,16 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
       for (int x = 0; x < *width; x++) {
         pixels[y * *width + x] = row[x];
       }
-      
-      // Let ESP handle background tasks during large image processing
-      if (y % 32 == 0) yield();
     }
     
     delete[] row;
+  } 
+  else {
+    Serial.print("Unsupported bits per pixel: ");
+    Serial.println(bpp);
+    delete[] pixels;
+    file.close();
+    return false;
   }
   
   file.close();
@@ -676,75 +581,27 @@ bool WebInterface::processImage(const char* filename, uint8_t** imageData,
   // Apply dithering
   applyDithering(pixels, *width, *height);
   
-  // Use the second half of our pre-allocated buffer for binary output
-  *imageData = _imageBuffer + (MAX_IMAGE_BUFFER_SIZE/2);
+  // Allocate memory for the output binary image
+  *imageData = new uint8_t[(pixelDataSize + 7) / 8 * (colorMode ? 2 : 1)];
+  if (!*imageData) {
+    delete[] pixels;
+    Serial.println("Failed to allocate memory for binary image");
+    return false;
+  }
   
   // Convert to binary
   if (!convertToBinary(pixels, *width, *height, *imageData, colorMode)) {
-    Serial.println(F("Failed to convert to binary"));
+    delete[] pixels;
+    delete[] *imageData;
     return false;
   }
+  
+  // Clean up
+  delete[] pixels;
   
   return true;
 }
 
-// Optimized Floyd-Steinberg dithering implementation
-void WebInterface::applyDithering(uint8_t* pixels, uint16_t width, uint16_t height) {
-  // Faster dithering algorithm
-  const int DITHER_SIZE = 16;
-  const int ERROR_BUFFER_SIZE = 2048; // Adjust based on max expected width
-  
-  // Create error buffer for the next line
-  int16_t* nextLineErrors = new int16_t[ERROR_BUFFER_SIZE];
-  memset(nextLineErrors, 0, ERROR_BUFFER_SIZE * sizeof(int16_t));
-  
-  for (uint16_t y = 0; y < height; y++) {
-    int16_t currentError = 0;
-    
-    for (uint16_t x = 0; x < width; x++) {
-      uint32_t idx = y * width + x;
-      
-      // Apply previous errors
-      int16_t pixelValue = pixels[idx] + currentError + nextLineErrors[x];
-      pixelValue = constrain(pixelValue, 0, 255);
-      
-      // Determine new pixel value
-      uint8_t newValue = (pixelValue < 128) ? 0 : 255;
-      pixels[idx] = newValue;
-      
-      // Calculate error
-      int16_t error = pixelValue - newValue;
-      
-      // Distribute error - 7/16 to the next pixel
-      currentError = (error * 7) / 16;
-      
-      // 5/16 to the pixel below
-      nextLineErrors[x] = 0; // Clear current position
-      
-      // 3/16 to the pixel below-left (if not at left edge)
-      if (x > 0) {
-        nextLineErrors[x-1] += (error * 3) / 16;
-      }
-      
-      // 1/16 to the pixel below-right (if not at right edge)
-      if (x < width - 1) {
-        nextLineErrors[x+1] = (error * 1) / 16;
-      }
-      
-      // 5/16 to the pixel below (add to next line's errors)
-      if (y < height - 1) {
-        nextLineErrors[x] += (error * 5) / 16;
-      }
-    }
-    
-    // Yield periodically to prevent watchdog resets
-    if (y % 32 == 0) yield();
-  }
-  
-  delete[] nextLineErrors;
-}
-
-// Optimized binary conversion
 bool WebInterface::convertToBinary(uint8_t* pixels, uint16_t width, uint16_t height, 
                                  uint8_t* output, bool colorMode, uint8_t threshold) {
   uint32_t pixelCount = width * height;
@@ -753,32 +610,71 @@ bool WebInterface::convertToBinary(uint8_t* pixels, uint16_t width, uint16_t hei
   // Clear output buffer
   memset(output, 0, byteCount * (colorMode ? 2 : 1));
   
-  // Process pixels in 8-pixel chunks for speed
-  for (uint32_t i = 0; i < pixelCount; i += 8) {
-    uint8_t outByte = 0;
+  // Process each pixel
+  for (uint32_t i = 0; i < pixelCount; i++) {
+    uint32_t byteIndex = i / 8;
+    uint8_t bitIndex = 7 - (i % 8); // MSB first
     
-    // Process 8 pixels at once (or fewer for the last byte)
-    uint8_t pixelsToProcess = min(8, (int)(pixelCount - i));
-    
-    for (uint8_t j = 0; j < pixelsToProcess; j++) {
-      if (pixels[i + j] < threshold) {
-        outByte |= (0x80 >> j); // MSB first
-      }
+    // Set the bit if pixel value is below threshold (black)
+    if (pixels[i] < threshold) {
+      output[byteIndex] |= (1 << bitIndex);
     }
     
-    output[i/8] = outByte;
-    
-    // For color mode
+    // For color mode (currently just a placeholder - in real implementation 
+    // this would process actual color data)
     if (colorMode) {
-      uint8_t colorOutByte = 0;
+      // In this simplified implementation, we'll just copy the same data
+      // In a real system, you'd extract the color information here
+      output[byteCount + byteIndex] |= (pixels[i] < 192) ? (1 << bitIndex) : 0;
+    }
+  }
+  
+  return true;
+}
+
+void WebInterface::applyDithering(uint8_t* pixels, uint16_t width, uint16_t height) {
+  // Floyd-Steinberg dithering algorithm
+  for (uint16_t y = 0; y < height; y++) {
+    for (uint16_t x = 0; x < width; x++) {
+      uint32_t idx = y * width + x;
+      uint8_t oldPixel = pixels[idx];
+      uint8_t newPixel = (oldPixel < 128) ? 0 : 255;
+      pixels[idx] = newPixel;
       
-      for (uint8_t j = 0; j < pixelsToProcess; j++) {
-        if (pixels[i + j] < 192) { // Different threshold for color
-          colorOutByte |= (0x80 >> j);
-        }
+      int16_t error = oldPixel - newPixel;
+      
+      // Distribute error to neighboring pixels
+      if (x < width - 1) {
+        pixels[idx + 1] = constrain(pixels[idx + 1] + error * 7 / 16, 0, 255);
       }
       
-      output[byteCount + i/8] = colorOutByte;
+      if (y < height - 1) {
+        if (x > 0) {
+          pixels[idx + width - 1] = constrain(pixels[idx + width - 1] + error * 3 / 16, 0, 255);
+        }
+        
+        pixels[idx + width] = constrain(pixels[idx + width] + error * 5 / 16, 0, 255);
+        
+        if (x < width - 1) {
+          pixels[idx + width + 1] = constrain(pixels[idx + width + 1] + error * 1 / 16, 0, 255);
+        }
+      }
+    }
+  }
+}
+
+bool WebInterface::resizeImage(uint8_t* input, uint16_t inputWidth, uint16_t inputHeight,
+                             uint8_t* output, uint16_t outputWidth, uint16_t outputHeight) {
+  // Simple nearest-neighbor resizing
+  float xRatio = (float)inputWidth / outputWidth;
+  float yRatio = (float)inputHeight / outputHeight;
+  
+  for (uint16_t y = 0; y < outputHeight; y++) {
+    for (uint16_t x = 0; x < outputWidth; x++) {
+      uint16_t srcX = (uint16_t)(x * xRatio);
+      uint16_t srcY = (uint16_t)(y * yRatio);
+      
+      output[y * outputWidth + x] = input[srcY * inputWidth + srcX];
     }
   }
   
@@ -1072,11 +968,8 @@ void WebInterface::sendHtmlResponse(String html, int statusCode) {
   _server->send(statusCode, "text/html", html);
 }
 
-// Add efficient caching for static resources
 void WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {
-  _server->on(uri, HTTP_GET, [this, uri, contentType, content]() {
-    // Set cache headers for static content - 1 day cache
-    _server->sendHeader("Cache-Control", "public, max-age=86400");
+  _server->on(uri, HTTP_GET, [this, contentType, content]() {
     _server->send(200, contentType, content);
   });
 }

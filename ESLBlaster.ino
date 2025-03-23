@@ -22,11 +22,6 @@
 #include "WebInterface.h"
 #include "OLEDInterface.h"
 #include "ESLProtocol.h"
-#include <Ticker.h>
-#include <ESP8266WiFiMulti.h>
-#include <coredecls.h>                  // crc32()
-#include <PolledTimeout.h>
-#include <ESP8266HTTPUpdateServer.h>   // OTA updates via web
 
 // Wi-Fi settings (will be loaded from EEPROM)
 char ssid[32] = "YOUR_WIFI_SSID";
@@ -44,21 +39,12 @@ IRTransmitter irTransmitter(4); // D2 (GPIO4)
 OLEDInterface oledInterface(&display);
 WebInterface webInterface(&server, &irTransmitter, &oledInterface);
 ESLProtocol eslProtocol(&irTransmitter);
-ESP8266WiFiMulti wifiMulti;
-ESP8266HTTPUpdateServer httpUpdater;
-Ticker watchdogTicker;
-Ticker autoSaveTimer;
-unsigned int watchdogCounter = 0;
-const unsigned int WATCHDOG_TIMEOUT = 30; // 30 second timeout
-uint32_t configCrc = 0;
-bool configDirty = false;
 
 // Stats tracking
 unsigned long lastActivityTime = 0;
 unsigned long totalFramesSent = 0;
 unsigned long uptimeStart = 0;
 unsigned long lastIpCheck = 0;
-String lastIpAddress;
 
 // Function prototypes
 void loadSettings();
@@ -66,32 +52,19 @@ void saveSettings();
 void setupWiFi();
 void startAPMode();
 void handleSerialCommands();
-void setupWatchdog();
-void incrementWatchdog();
-void resetWatchdog();
-void manageWiFiConnection();
-void resetToDefaultSettings();
-uint32_t calculateSettingsCrc();
-void checkAndSaveConfig();
-void saveMacAddress();
-String getDisplayAddress();
 
 void setup() {
-  // Increase serial buffer size for better performance
-  Serial.setRxBufferSize(1024);
+  // Initialize serial
   Serial.begin(115200);
-  Serial.println(F("\nESLBlaster Starting..."));
+  Serial.println("\nESLBlaster Starting...");
   
-  // Initialize watchdog early
-  setupWatchdog();
-  
-  // Set CPU to maximum frequency
+  // Set CPU to maximum frequency for best timing accuracy
   system_update_cpu_freq(160);
   
   // Initialize EEPROM
   EEPROM.begin(512);
   
-  // Load settings with CRC check
+  // Load settings
   loadSettings();
   
   // Initialize IR transmitter
@@ -100,67 +73,55 @@ void setup() {
   // Initialize OLED
   oledInterface.begin();
   oledInterface.showSplashScreen("ESLBlaster", FW_VERSION);
-  delay(500); // Reduced initial delay
+  delay(1500);
   
   // Initialize file system for image uploads
   if (!LittleFS.begin()) {
-    Serial.println(F("Failed to initialize LittleFS"));
+    Serial.println("Failed to initialize LittleFS");
     oledInterface.showError("FS Init Failed");
-    delay(1000);
-    
-    // Format the file system if it failed to mount
-    Serial.println(F("Formatting file system..."));
-    LittleFS.format();
-    if (LittleFS.begin()) {
-      Serial.println(F("File system formatted and mounted"));
-      oledInterface.showStatus("FS Formatted", "Successfully");
-    } else {
-      Serial.println(F("File system format failed"));
-      oledInterface.showError("FS Format Failed");
-    }
+    delay(2000);
   } else {
-    Serial.println(F("File system initialized"));
-    
-    // Check and clean temp files
-    if (LittleFS.exists("/temp_image.bin")) {
-      LittleFS.remove("/temp_image.bin");
-    }
+    Serial.println("File system initialized");
   }
   
-  // Set up WiFi with improved connection logic
+  // Set up WiFi
   setupWiFi();
   
   // Initialize web server routes
   webInterface.setupRoutes();
   
-  // Setup OTA updates
-  httpUpdater.setup(&server, "/update", "admin", "eslblaster");
-  
   // Start the server
   server.begin();
-  Serial.println(F("HTTP server started"));
-  
-  // Setup auto-save for configuration changes
-  autoSaveTimer.attach(300, checkAndSaveConfig); // Check every 5 minutes
+  Serial.println("HTTP server started");
   
   // Initialize stats
   uptimeStart = millis();
   
   // Ready to use - verify we have a valid IP before showing ready
-  String ipString = getDisplayAddress();
+  delay(1000); // Extra delay to ensure network is stable
+  
+  IPAddress currentIP;
+  String ipString;
+  
+  if (WiFi.getMode() == WIFI_STA) {
+    currentIP = WiFi.localIP();
+    ipString = currentIP.toString();
+    // Double-check that we have a valid IP
+    if (currentIP[0] == 0) {
+      ipString = "No IP - Check WiFi";
+    }
+  } else {
+    currentIP = WiFi.softAPIP();
+    ipString = "AP: " + currentIP.toString();
+  }
+  
   oledInterface.showMainScreen("Ready", ipString);
-  
+
   // Serial protocol indicator
-  Serial.printf("ESLBlaster%s1 (v%s)\n", HW_VERSION, FW_VERSION);
-  
-  // Reset watchdog counter
-  resetWatchdog();
+  Serial.println("ESLBlaster" + String(HW_VERSION) + "1");
 }
 
 void loop() {
-  // Feed the watchdog to prevent reset
-  resetWatchdog();
-  
   // Handle incoming web requests
   server.handleClient();
   
@@ -171,130 +132,54 @@ void loop() {
   oledInterface.update();
   
   // Periodically check and update IP address if it changes
-  static unsigned long lastIpCheck = 0;
   if (millis() - lastIpCheck > 10000) { // Check every 10 seconds
     lastIpCheck = millis();
     
+    IPAddress currentIP;
+    String ipString;
+    
     if (WiFi.getMode() == WIFI_STA && WiFi.status() == WL_CONNECTED) {
-      String newIp = WiFi.localIP().toString();
-      if (newIp != lastIpAddress && newIp != "0.0.0.0") {
-        lastIpAddress = newIp;
-        oledInterface.showMainScreen("Ready", newIp);
+      currentIP = WiFi.localIP();
+      ipString = currentIP.toString();
+      // Only update if we have a valid IP and not already showing it
+      if (currentIP[0] != 0) {
+        oledInterface.showMainScreen("Ready", ipString);
       }
     }
   }
   
-  // Improved WiFi management
-  manageWiFiConnection();
-  
-  // Handle configuration saving if needed
-  if (configDirty) {
-    saveSettings();
-    configDirty = false;
-  }
-  
-  // Yield to avoid WDT resets
-  yield();
-}
-
-void setupWatchdog() {
-  watchdogTicker.attach(1, incrementWatchdog);
-}
-
-void incrementWatchdog() {
-  watchdogCounter++;
-  if (watchdogCounter > WATCHDOG_TIMEOUT) {
-    Serial.println(F("Watchdog timeout - restarting"));
-    ESP.restart();
-  }
-}
-
-void resetWatchdog() {
-  watchdogCounter = 0;
-}
-
-void setupWiFi() {
-  if (apMode) {
-    startAPMode();
-  } else {
-    // Try to connect to WiFi with multi support
-    oledInterface.showStatus("Connecting", "to WiFi...");
-    
-    // Clear connection info
-    wifiMulti.cleanAPlist();
-    
-    // Configure WiFi
-    WiFi.persistent(true);
-    WiFi.mode(WIFI_STA);
-    
-    // Add the configured AP
-    wifiMulti.addAP(ssid, password);
-    
-    // Try to connect with timeout
-    Serial.println(F("Connecting to WiFi..."));
-    
-    using esp8266::polledTimeout::oneShotMs;
-    oneShotMs timeout(15000); // 15 second timeout
-    
-    while (!timeout && wifiMulti.run() != WL_CONNECTED) {
-      delay(100);
-      Serial.print(".");
-      yield();
-    }
-    
-    if (WiFi.status() == WL_CONNECTED) {
-      // Successfully connected
-      Serial.println(F("\nWiFi connected"));
-      Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-      lastIpAddress = WiFi.localIP().toString();
-      
-      // Save MAC to EEPROM if it's not there
-      saveMacAddress();
-      
-      oledInterface.showStatus("WiFi Connected", lastIpAddress);
-    } else {
-      // Connection failed, switch to AP mode
-      Serial.println(F("\nWiFi connection failed"));
-      startAPMode();
-    }
-  }
-}
-
-void manageWiFiConnection() {
+  // Reconnect WiFi if disconnected (only if in STA mode)
   static unsigned long lastWifiCheck = 0;
-  
-  // Only check every 30 seconds in STA mode
-  if (WiFi.getMode() == WIFI_STA && millis() - lastWifiCheck > 30000) {
+  if (WiFi.getMode() == WIFI_STA && millis() - lastWifiCheck > 30000) { // Every 30 seconds
     lastWifiCheck = millis();
-    
     if (WiFi.status() != WL_CONNECTED) {
-      Serial.println(F("WiFi disconnected. Reconnecting..."));
+      Serial.println("WiFi disconnected. Reconnecting...");
       oledInterface.showStatus("WiFi", "Reconnecting...");
+      WiFi.reconnect();
       
-      // Try to reconnect using wifiMulti
-      using esp8266::polledTimeout::oneShotMs;
-      oneShotMs timeout(10000); // 10 second timeout
-      
-      while (!timeout && wifiMulti.run() != WL_CONNECTED) {
-        delay(100);
-        yield();
+      // Wait up to 10 seconds for reconnection
+      int attempts = 0;
+      while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        attempts++;
       }
       
       if (WiFi.status() == WL_CONNECTED) {
-        lastIpAddress = WiFi.localIP().toString();
-        oledInterface.showMainScreen("Ready", lastIpAddress);
+        oledInterface.showMainScreen("Ready", WiFi.localIP().toString());
       } else {
         oledInterface.showStatus("WiFi Failed", "Check Settings");
       }
     }
   }
+  
+  // Perform any background tasks
+  yield();
 }
 
 void loadSettings() {
-  uint32_t storedCrc = EEPROM.get(508, configCrc);
-  
+  // Read settings from EEPROM
   if (EEPROM.read(0) == 0xAA) {
-    // Read settings
+    // Valid settings marker found
     int i = 0;
     for (i = 0; i < 32; i++) {
       ssid[i] = EEPROM.read(i + 1);
@@ -307,30 +192,17 @@ void loadSettings() {
     }
     
     apMode = EEPROM.read(97) == 1;
-    
-    // Calculate CRC32 of the loaded settings
-    uint32_t calculatedCrc = calculateSettingsCrc();
-    
-    if (calculatedCrc != storedCrc) {
-      Serial.println(F("Settings CRC mismatch, using defaults"));
-      resetToDefaultSettings();
-    }
   } else {
     // No valid settings, use defaults
-    resetToDefaultSettings();
+    strcpy(ssid, "YOUR_WIFI_SSID");
+    strcpy(password, "YOUR_WIFI_PASSWORD");
+    apMode = false;
   }
 }
 
-void resetToDefaultSettings() {
-  strcpy(ssid, "ESLBlaster");
-  strcpy(password, "password");
-  apMode = true; // Default to AP mode for new devices
-  configDirty = true;
-}
-
 void saveSettings() {
-  // Write marker
-  EEPROM.write(0, 0xAA);
+  // Write settings to EEPROM
+  EEPROM.write(0, 0xAA);  // Valid settings marker
   
   // Write SSID
   for (int i = 0; i < 32; i++) {
@@ -347,80 +219,74 @@ void saveSettings() {
   // Write AP mode flag
   EEPROM.write(97, apMode ? 1 : 0);
   
-  // Calculate and store CRC
-  configCrc = calculateSettingsCrc();
-  EEPROM.put(508, configCrc);
-  
-  // Commit changes
   EEPROM.commit();
-  Serial.println(F("Settings saved to EEPROM"));
 }
 
-uint32_t calculateSettingsCrc() {
-  // Create a buffer with all settings
-  uint8_t buffer[98]; // 97 bytes of data + marker
-  buffer[0] = 0xAA;
-  
-  // Copy SSID
-  for (int i = 0; i < 32; i++) {
-    buffer[i + 1] = ssid[i];
-  }
-  
-  // Copy password
-  for (int i = 0; i < 64; i++) {
-    buffer[i + 33] = password[i];
-  }
-  
-  // Copy AP mode
-  buffer[97] = apMode ? 1 : 0;
-  
-  // Calculate CRC32
-  return crc32(buffer, sizeof(buffer));
-}
-
-void checkAndSaveConfig() {
-  if (configDirty) {
-    saveSettings();
-    configDirty = false;
-  }
-}
-
-void saveMacAddress() {
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  
-  bool macChanged = false;
-  for (int i = 0; i < 6; i++) {
-    if (EEPROM.read(98 + i) != mac[i]) {
-      EEPROM.write(98 + i, mac[i]);
-      macChanged = true;
-    }
-  }
-  
-  if (macChanged) {
-    EEPROM.commit();
-    Serial.print(F("MAC Address saved: "));
-    for (int i = 0; i < 6; i++) {
-      Serial.print(mac[i], HEX);
-      if (i < 5) Serial.print(":");
-    }
-    Serial.println();
-  }
-}
-
-String getDisplayAddress() {
-  if (WiFi.getMode() == WIFI_STA) {
-    IPAddress ip = WiFi.localIP();
-    lastIpAddress = ip.toString();
-    if (ip[0] == 0) {
-      return "No IP - Check WiFi";
-    }
-    return lastIpAddress;
+void setupWiFi() {
+  // Always start in station mode first (unless explicitly set to AP mode)
+  if (apMode) {
+    startAPMode();
   } else {
-    IPAddress ip = WiFi.softAPIP();
-    lastIpAddress = "AP: " + ip.toString();
-    return lastIpAddress;
+    // Try to connect to WiFi
+    oledInterface.showStatus("Connecting", "to WiFi...");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    
+    int wifiAttempts = 0;
+    bool connected = false;
+    
+    // Wait longer for connection (30 attempts * 500ms = 15 seconds max)
+    while (wifiAttempts < 30) {
+      if (WiFi.status() == WL_CONNECTED) {
+        connected = true;
+        break;
+      }
+      delay(500);
+      Serial.print(".");
+      wifiAttempts++;
+    }
+    
+    if (connected) {
+      // Successfully connected
+      Serial.println("\nWiFi connected");
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      
+      // Make sure IP is valid before showing it
+      IPAddress ip = WiFi.localIP();
+      if (ip[0] != 0) {
+        oledInterface.showStatus("WiFi Connected", ip.toString());
+      } else {
+        oledInterface.showStatus("WiFi Connected", "IP Pending");
+        delay(2000); // Wait a bit more for DHCP
+        oledInterface.showStatus("WiFi Connected", WiFi.localIP().toString());
+      }
+    } else {
+      // Connection failed, switch to AP mode
+      Serial.println("\nWiFi connection failed");
+      startAPMode();
+    }
   }
+}
+
+void startAPMode() {
+  oledInterface.showStatus("Starting", "AP Mode");
+  
+  // Disconnect from any existing connections first
+  WiFi.disconnect();
+  delay(100);
+  
+  // Set up access point mode
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("ESLBlaster", "password");
+  
+  // Wait a moment for AP to initialize
+  delay(500);
+  
+  IPAddress apIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(apIP);
+  oledInterface.showStatus("AP Active", apIP.toString());
 }
 
 void handleSerialCommands() {
@@ -502,7 +368,7 @@ void handleSerialCommands() {
               strncpy(password, newPassword.c_str(), 63);
               password[63] = '\0';
               apMode = false;
-              configDirty = true;
+              saveSettings();
               
               Serial.write('K');  // Acknowledge
               delay(500);
@@ -518,7 +384,7 @@ void handleSerialCommands() {
         
       case 'A':  // Toggle AP mode
         apMode = !apMode;
-        configDirty = true;
+        saveSettings();
         Serial.write('K');  // Acknowledge
         delay(500);
         ESP.restart();  // Restart to apply new settings
