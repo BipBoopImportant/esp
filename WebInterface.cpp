@@ -40,11 +40,11 @@ void WebInterface::setupRoutes() {
 }
 
 void WebInterface::handleRoot() {
-  String html = F("<!DOCTYPE html>"revent caching
-"<html lang=\"en\">"r("Cache-Control", "no-cache, no-store, must-revalidate");
-"<head>"r->sendHeader("Pragma", "no-cache");
-"  <meta charset=\"UTF-8\">"es", "0");
-"  <title>ESL Blaster</title>"
+  // Set cache control headers to prevent caching
+  _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  _server->sendHeader("Pragma", "no-cache");
+  _server->sendHeader("Expires", "0");
+  
   String html = F("<!DOCTYPE html>"
 "<html lang=\"en\">"
 "<head>"
@@ -1154,87 +1154,91 @@ void WebInterface::handleRestart() {
   ESP.restart();
 }
 
-void WebInterface::handleStatus() {ng
-  // Create a JSON response with the current status _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  DynamicJsonDocument doc(512);  _server->sendHeader("Pragma", "no-cache");
+void WebInterface::handleStatus() {
+  // Create a JSON response with the current status
+  DynamicJsonDocument doc(512);
   
   doc["wifi_mode"] = WiFi.getMode() == WIFI_STA ? "Station" : "Access Point";
   doc["connected"] = WiFi.status() == WL_CONNECTED ? "Yes" : "No";
   doc["ip"] = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
-  doc["uptime"] = (millis() - uptimeStart) / 1000;oid WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}  });    _server->send(200, contentType, content);  _server->on(uri, HTTP_GET, [this, contentType, content]() {void WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {}  _server->send(statusCode, "text/html", html);void WebInterface::sendHtmlResponse(String html, int statusCode) {}  _server->send(400, "application/json", response);    serializeJson(doc, response);  String response;    doc["error"] = error;  doc["success"] = false;  DynamicJsonDocument doc(256);void WebInterface::sendErrorResponse(String error) {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["message"] = message;  doc["success"] = true;  DynamicJsonDocument doc(256);void WebInterface::sendSuccessResponse(String message) {}  _server->send(404, "text/plain", "Not Found");void WebInterface::handleNotFound() {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["message"] = "1.25MHz test completed successfully";  doc["success"] = true;  DynamicJsonDocument doc(256);  // Send response    _oledInterface->showMainScreen("Ready", ipString);  String ipString = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();  // Update display    _irTransmitter->testFrequency();  // Run the test    _oledInterface->showStatus("Testing", "1.25MHz signal");void WebInterface::handleTestFrequency() {}  _server->send(200, "application/json", response);    serializeJson(doc, response);  String response;    doc["system_user"] = "BipBoopImportant";  doc["last_update"] = "2025-03-23 05:47:25";  doc["build_date"] = "2025-03-23";  doc["fw_version"] = FW_VERSION;  doc["hw_version"] = HW_VERSION;  doc["busy"] = _irTransmitter->isBusy();  doc["cpu_freq"] = ESP.getCpuFreqMHz();  doc["frames_sent"] = totalFramesSent;  doc["free_heap"] = ESP.getFreeHeap();  _server->on(uri, HTTP_GET, [this, contentType, content]() {
+  doc["uptime"] = (millis() - uptimeStart) / 1000;
+  doc["free_heap"] = ESP.getFreeHeap();
+  doc["frames_sent"] = totalFramesSent;
+  doc["cpu_freq"] = ESP.getCpuFreqMHz();
+  doc["busy"] = _irTransmitter->isBusy();
+  doc["hw_version"] = HW_VERSION;
+  doc["fw_version"] = FW_VERSION;
+  doc["build_date"] = "2025-03-23";
+  doc["last_update"] = "2025-03-23 05:47:25";
+  doc["system_user"] = "BipBoopImportant";
+  
+  String response;
+  serializeJson(doc, response);
+  
+  // Add cache control headers
+  _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  _server->sendHeader("Pragma", "no-cache");
+  _server->sendHeader("Expires", "0");
+  _server->send(200, "application/json", response);
+}
+
+void WebInterface::handleTestFrequency() {
+  _oledInterface->showStatus("Testing", "1.25MHz signal");
+  
+  // Run the test
+  _irTransmitter->testFrequency();
+  
+  // Update display
+  String ipString = WiFi.getMode() == WIFI_STA ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+  _oledInterface->showMainScreen("Ready", ipString);
+  
+  // Send response
+  DynamicJsonDocument doc(256);
+  doc["success"] = true;
+  doc["message"] = "1.25MHz test completed successfully";
+  
+  String response;
+  serializeJson(doc, response);
+  
+  _server->send(200, "application/json", response);
+}
+
+void WebInterface::handleNotFound() {
+  _server->send(404, "text/plain", "Not Found");
+}
+
+void WebInterface::sendSuccessResponse(String message) {
+  DynamicJsonDocument doc(256);
+  doc["success"] = true;
+  doc["message"] = message;
+  
+  String response;
+  serializeJson(doc, response);
+  
+  _server->send(200, "application/json", response);
+}
+
+void WebInterface::sendErrorResponse(String error) {
+  DynamicJsonDocument doc(256);
+  doc["success"] = false;
+  doc["error"] = error;
+  
+  String response;
+  serializeJson(doc, response);
+  
+  _server->send(400, "application/json", response);
+}
+
+void WebInterface::sendHtmlResponse(String html, int statusCode) {
+  // Add cache control headers to prevent caching
+  _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  _server->sendHeader("Pragma", "no-cache");
+  _server->sendHeader("Expires", "0");
+  _server->send(statusCode, "text/html", html);
+}
+
+void WebInterface::serveStatic(const char* uri, const char* contentType, const char* content) {
+  _server->on(uri, HTTP_GET, [this, contentType, content]() {
     _server->send(200, contentType, content);
   });
 }
